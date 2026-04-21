@@ -34,4 +34,18 @@ export async function printUpdate(registry: Registry): Promise<void> {
     for (const f of result.failed) log.error(`${id}: failed ${f.item} — ${f.error}`);
   }
   log.info(`Done. ${report.totalUpdated} updated, ${report.totalFailed} failed.`);
+  const { aggregateChangelog, ADAPTER_REPOS } = await import('../changelog/aggregate.js');
+  const entries = await aggregateChangelog(
+    report.perAdapter
+      .filter(x => x.result.updated.length > 0)
+      .map(x => ({ id: x.id, repo: ADAPTER_REPOS[x.id] }))
+  );
+  if (entries.length) {
+    console.log('\n--- Changelogs ---');
+    for (const e of entries) {
+      console.log(`\n[${e.adapter}] ${e.tag}`);
+      console.log(e.body.slice(0, 500));
+      console.log(`→ ${e.url}`);
+    }
+  }
 }
