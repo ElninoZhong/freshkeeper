@@ -1,6 +1,6 @@
 {
   "name": "freshkeeper",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "OpenClaw, Hermes, Claude Code, and Codex users' unified update keeper.",
   "type": "module",
   "bin": {

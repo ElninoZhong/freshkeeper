@@ -1,5 +1,8 @@
 import { Command } from 'commander';
+import { createRequire } from 'node:module';
 import { Registry } from './adapters/registry.js';
+
+const pkg = createRequire(import.meta.url)('../package.json') as { version: string };
 import { claudeCodeAdapter } from './adapters/claude-code.js';
 import { claudePluginsAdapter } from './adapters/claude-plugins.js';
 import { skillsCliAdapter } from './adapters/skills-cli.js';
@@ -28,7 +31,7 @@ export function run(): void {
   program
     .name('freshkeeper')
     .description('Unified update keeper for AI coding agents')
-    .version('0.1.0-alpha.0');
+    .version(pkg.version);
 
   program
     .command('list')
