@@ -3,6 +3,7 @@ import { Registry } from './adapters/registry.js';
 import { claudeCodeAdapter } from './adapters/claude-code.js';
 import { claudePluginsAdapter } from './adapters/claude-plugins.js';
 import { skillsCliAdapter } from './adapters/skills-cli.js';
+import { codexAdapter } from './adapters/codex.js';
 import { printList } from './commands/list.js';
 import { printCheck } from './commands/check.js';
 import { printUpdate } from './commands/update.js';
@@ -12,6 +13,7 @@ function buildRegistry(): Registry {
   r.register(claudeCodeAdapter);
   r.register(claudePluginsAdapter);
   r.register(skillsCliAdapter);
+  r.register(codexAdapter);
   return r;
 }
 
