@@ -5,6 +5,7 @@ import { claudePluginsAdapter } from './adapters/claude-plugins.js';
 import { skillsCliAdapter } from './adapters/skills-cli.js';
 import { codexAdapter } from './adapters/codex.js';
 import { openClawAdapter } from './adapters/openclaw.js';
+import { hermesAdapter } from './adapters/hermes.js';
 import { printList } from './commands/list.js';
 import { printCheck } from './commands/check.js';
 import { printUpdate } from './commands/update.js';
@@ -16,6 +17,7 @@ function buildRegistry(): Registry {
   r.register(skillsCliAdapter);
   r.register(codexAdapter);
   r.register(openClawAdapter);
+  r.register(hermesAdapter);
   return r;
 }
 
