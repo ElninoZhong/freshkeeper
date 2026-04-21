@@ -5,6 +5,7 @@ import { claudePluginsAdapter } from './adapters/claude-plugins.js';
 import { skillsCliAdapter } from './adapters/skills-cli.js';
 import { printList } from './commands/list.js';
 import { printCheck } from './commands/check.js';
+import { printUpdate } from './commands/update.js';
 
 function buildRegistry(): Registry {
   const r = new Registry();
@@ -35,6 +36,14 @@ export function run(): void {
     .action(async () => {
       const r = buildRegistry();
       await printCheck(r);
+    });
+
+  program
+    .command('update')
+    .description('Update all installed agents (CLI + plugins + skills)')
+    .action(async () => {
+      const r = buildRegistry();
+      await printUpdate(r);
     });
 
   program.parse(process.argv);
