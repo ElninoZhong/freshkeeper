@@ -9,6 +9,7 @@ import { hermesAdapter } from './adapters/hermes.js';
 import { printList } from './commands/list.js';
 import { printCheck } from './commands/check.js';
 import { printUpdate } from './commands/update.js';
+import { runSchedule } from './commands/schedule.js';
 
 function buildRegistry(): Registry {
   const r = new Registry();
@@ -50,6 +51,13 @@ export function run(): void {
     .action(async () => {
       const r = buildRegistry();
       await printUpdate(r);
+    });
+
+  program
+    .command('schedule <cron>')
+    .description('Set update schedule cron expression, or "off" to remove it')
+    .action(async (cron) => {
+      await runSchedule(cron);
     });
 
   program.parse(process.argv);
