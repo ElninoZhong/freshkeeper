@@ -4,3 +4,6 @@ dist
 *.log
 .freshkeeper-dev/
 coverage
+
+AGENTS.md
+.claude-mem/
