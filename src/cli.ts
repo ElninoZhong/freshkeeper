@@ -10,6 +10,7 @@ import { printList } from './commands/list.js';
 import { printCheck } from './commands/check.js';
 import { printUpdate } from './commands/update.js';
 import { runSchedule } from './commands/schedule.js';
+import { runInit } from './commands/init.js';
 
 function buildRegistry(): Registry {
   const r = new Registry();
@@ -58,6 +59,14 @@ export function run(): void {
     .description('Set update schedule cron expression, or "off" to remove it')
     .action(async (cron) => {
       await runSchedule(cron);
+    });
+
+  program
+    .command('init')
+    .description('Interactive setup: detect agents, run first update, install schedule')
+    .action(async () => {
+      const r = buildRegistry();
+      await runInit(r);
     });
 
   program.parse(process.argv);
