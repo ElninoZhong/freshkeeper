@@ -4,6 +4,7 @@ import { claudeCodeAdapter } from './adapters/claude-code.js';
 import { claudePluginsAdapter } from './adapters/claude-plugins.js';
 import { skillsCliAdapter } from './adapters/skills-cli.js';
 import { printList } from './commands/list.js';
+import { printCheck } from './commands/check.js';
 
 function buildRegistry(): Registry {
   const r = new Registry();
@@ -26,6 +27,14 @@ export function run(): void {
     .action(async () => {
       const r = buildRegistry();
       await printList(r);
+    });
+
+  program
+    .command('check')
+    .description('Show pending updates across installed agents')
+    .action(async () => {
+      const r = buildRegistry();
+      await printCheck(r);
     });
 
   program.parse(process.argv);
