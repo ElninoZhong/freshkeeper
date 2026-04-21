@@ -1,0 +1,37 @@
+{
+  "name": "freshkeeper",
+  "version": "0.1.0-alpha.0",
+  "description": "OpenClaw, Hermes, Claude Code, and Codex users' unified update keeper.",
+  "type": "module",
+  "bin": {
+    "freshkeeper": "./bin/freshkeeper.js"
+  },
+  "files": ["bin", "dist", "README.md", "README.zh-CN.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "execa": "^9.5.0",
+    "node-cron": "^3.0.3",
+    "ora": "^8.1.0",
+    "simple-git": "^3.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@types/node-cron": "^3.0.11",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": { "node": ">=20" },
+  "keywords": ["claude-code", "codex", "openclaw", "hermes", "ai-agents", "updater", "cli"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/<USER>/freshkeeper.git" },
+  "homepage": "https://github.com/<USER>/freshkeeper"
+}
