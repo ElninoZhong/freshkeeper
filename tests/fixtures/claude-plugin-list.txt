@@ -1,0 +1,11 @@
+Installed plugins:
+
+  ❯ claude-mem@thedotmack
+    Version: 12.1.5
+    Scope: user
+    Status: ✔ enabled
+
+  ❯ codex@openai-codex
+    Version: 1.0.4
+    Scope: user
+    Status: ✔ enabled
