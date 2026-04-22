@@ -4,8 +4,8 @@
 The unified update keeper for OpenClaw, Hermes, Claude Code, and Codex users.
 
 ![npm](https://img.shields.io/npm/v/freshkeeper)
-![CI](https://img.shields.io/github/actions/workflow/status/freshkeeper/freshkeeper/ci.yml)
-![License](https://img.shields.io/github/license/freshkeeper/freshkeeper)
+![CI](https://img.shields.io/github/actions/workflow/status/ElninoZhong/freshkeeper/ci.yml)
+![License](https://img.shields.io/github/license/ElninoZhong/freshkeeper)
 ![Node](https://img.shields.io/node/v/freshkeeper)
 
 > 📹 Demo GIF coming soon
@@ -67,6 +67,15 @@ A: Yes. Every update command shown is the same one you would run manually; Fresh
 
 **Q: What about Cursor / Windsurf / Aider?**  
 A: On the roadmap for v1.1.
+
+## Roadmap
+Actively planned, open to co-design — drop thoughts in the linked issues.
+
+- [ ] [#1 Per-project lockfile support](https://github.com/ElninoZhong/freshkeeper/issues/1) — pin CLI + plugin + skill versions per project so version drift stops surfacing as mystery model failures
+- [ ] Cursor / Windsurf / Aider / Gemini CLI adapters (v1.1)
+- [ ] macOS native notifications on update complete
+- [ ] Windows support via Task Scheduler
+- [ ] Trusted Publisher auto-release via GitHub Actions OIDC
 
 ## Contributing
 See [`docs/`](docs/) for architecture notes and implementation context. If you want to add a new adapter, start with [`docs/plan.md`](docs/plan.md).
