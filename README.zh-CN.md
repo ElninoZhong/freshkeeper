@@ -41,7 +41,7 @@ npx freshkeeper@latest init
 |---|---|---|---|
 | `claude-code` | Claude Code CLI | 官方安装器 | `claude update` |
 | `claude-plugins` | Claude Code Plugins | 通过 `claude plugin install` 安装 | 每个插件用 `claude plugin update <name>` 更新 |
-| `skills-cli` | Skills CLI (`skills.sh`) | `npm i -g skills` 或 `npx skills` | 在项目目录里执行 `npx skills update -y` |
+| `skills-cli` | Skills CLI (`skills.sh`) | `npm i -g skills` 或 `npx skills` | 从 `skills-lock.json` 逐个刷新 GitHub skill 到 Universal/shared 技能库；没有 lockfile 时回退到 `skills update -y` |
 | `codex` | OpenAI Codex CLI | Claude 插件 `codex@openai-codex` | `claude plugin update codex@openai-codex` |
 | `openclaw` | OpenClaw | `npm install -g openclaw@latest` | `openclaw update --channel stable` + `openclaw skills update` |
 | `hermes` | Hermes Agent | `curl` 安装脚本 | `hermes update` + `hermes skills update` |
@@ -66,6 +66,9 @@ freshkeeper schedule off            # 删除定时任务
 ## 常见问题
 **Q：这会取代 `claude plugin update` 或 `npx skills update` 吗？**  
 A：不会。Freshkeeper 只是把这些原本就有的命令打包起来，集中一次跑完。
+
+**Q：Freshkeeper 怎么更新项目里的 skills？**  
+A：如果找到 `skills-lock.json`，它会对每个 GitHub 来源的 skill 执行 `skills add <source> --skill <name> --agent universal -y`。这样会限定刷新到 Universal/shared 技能库，避免误更新 Claude、Trae 等 agent 专属目录。
 
 **Q：可以放心开自动运行吗？**  
 A：可以。这里执行的更新命令，和你平时手动输入的是同一套；Freshkeeper 只是按顺序帮你跑，并把输出记录下来。

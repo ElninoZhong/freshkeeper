@@ -8,9 +8,18 @@ export interface ExecResult {
   error?: string;
 }
 
-export async function safeExec(cmd: string, args: string[], opts?: { cwd?: string; env?: NodeJS.ProcessEnv }): Promise<ExecResult> {
+export async function safeExec(
+  cmd: string,
+  args: string[],
+  opts?: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number }
+): Promise<ExecResult> {
   try {
-    const r = await execa(cmd, args, { cwd: opts?.cwd, env: opts?.env, reject: false });
+    const r = await execa(cmd, args, {
+      cwd: opts?.cwd,
+      env: opts?.env,
+      reject: false,
+      timeout: opts?.timeoutMs
+    });
     return {
       ok: r.exitCode === 0 && !r.failed,
       stdout: r.stdout,

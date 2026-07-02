@@ -36,7 +36,7 @@ Freshkeeper detects which supported agents are already installed on your machine
 |---|---|---|---|
 | `claude-code` | Claude Code CLI | official installer | `claude update` |
 | `claude-plugins` | Claude Code Plugins | via `claude plugin install` | each plugin via `claude plugin update <name>` |
-| `skills-cli` | Skills CLI (`skills.sh`) | `npm i -g skills` or `npx skills` | `npx skills update -y` in project dir |
+| `skills-cli` | Skills CLI (`skills.sh`) | `npm i -g skills` or `npx skills` | Refresh GitHub skills from `skills-lock.json` into the Universal/shared skills library; falls back to `skills update -y` when no lockfile is found |
 | `codex` | OpenAI Codex CLI | Claude plugin `codex@openai-codex` | `claude plugin update codex@openai-codex` |
 | `openclaw` | OpenClaw | `npm install -g openclaw@latest` | `openclaw update --channel stable` + `openclaw skills update` |
 | `hermes` | Hermes Agent | `curl` install script | `hermes update` + `hermes skills update` |
@@ -61,6 +61,9 @@ freshkeeper schedule off            # remove
 ## FAQ
 **Q: Does this replace `claude plugin update` or `npx skills update`?**  
 A: No. It wraps and batches them.
+
+**Q: How does Freshkeeper update project skills?**  
+A: When it finds a `skills-lock.json`, it refreshes each GitHub-backed skill with `skills add <source> --skill <name> --agent universal -y`. This keeps shared skills scoped to the Universal library and avoids accidentally updating every agent-specific skills directory.
 
 **Q: Is it safe to run automatically?**  
 A: Yes. Every update command shown is the same one you would run manually; Freshkeeper just runs them in sequence and logs the output.
