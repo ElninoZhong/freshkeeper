@@ -24,7 +24,7 @@ export async function runUpdate(registry: Registry): Promise<UpdateReport> {
   };
 }
 
-export async function printUpdate(registry: Registry): Promise<void> {
+export async function printUpdate(registry: Registry): Promise<UpdateReport> {
   const spinner = ora('Updating all installed agents...').start();
   const report = await runUpdate(registry);
   spinner.stop();
@@ -48,4 +48,6 @@ export async function printUpdate(registry: Registry): Promise<void> {
       console.log(`→ ${e.url}`);
     }
   }
+  if (report.totalFailed > 0) process.exitCode = 1;
+  return report;
 }

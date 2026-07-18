@@ -1,32 +1,20 @@
 import { Command } from 'commander';
 import { createRequire } from 'node:module';
-import { Registry } from './adapters/registry.js';
+import { buildRegistry } from './adapters/catalog.js';
+import { loadConfig } from './config.js';
 
 const pkg = createRequire(import.meta.url)('../package.json') as { version: string };
-import { claudeCodeAdapter } from './adapters/claude-code.js';
-import { claudePluginsAdapter } from './adapters/claude-plugins.js';
-import { skillsCliAdapter } from './adapters/skills-cli.js';
-import { codexAdapter } from './adapters/codex.js';
-import { openClawAdapter } from './adapters/openclaw.js';
-import { hermesAdapter } from './adapters/hermes.js';
 import { printList } from './commands/list.js';
 import { printCheck } from './commands/check.js';
 import { printUpdate } from './commands/update.js';
 import { runSchedule } from './commands/schedule.js';
 import { runInit } from './commands/init.js';
 
-function buildRegistry(): Registry {
-  const r = new Registry();
-  r.register(claudeCodeAdapter);
-  r.register(claudePluginsAdapter);
-  r.register(skillsCliAdapter);
-  r.register(codexAdapter);
-  r.register(openClawAdapter);
-  r.register(hermesAdapter);
-  return r;
+function configuredRegistry() {
+  return buildRegistry(loadConfig().enabledAdapters);
 }
 
-export function run(): void {
+export async function run(): Promise<void> {
   const program = new Command();
   program
     .name('freshkeeper')
@@ -37,7 +25,7 @@ export function run(): void {
     .command('list')
     .description('Show which supported agents are installed')
     .action(async () => {
-      const r = buildRegistry();
+      const r = configuredRegistry();
       await printList(r);
     });
 
@@ -45,7 +33,7 @@ export function run(): void {
     .command('check')
     .description('Show pending updates across installed agents')
     .action(async () => {
-      const r = buildRegistry();
+      const r = configuredRegistry();
       await printCheck(r);
     });
 
@@ -53,7 +41,7 @@ export function run(): void {
     .command('update')
     .description('Update all installed agents (CLI + plugins + skills)')
     .action(async () => {
-      const r = buildRegistry();
+      const r = configuredRegistry();
       await printUpdate(r);
     });
 
@@ -68,9 +56,9 @@ export function run(): void {
     .command('init')
     .description('Interactive setup: detect agents, run first update, install schedule')
     .action(async () => {
-      const r = buildRegistry();
+      const r = configuredRegistry();
       await runInit(r);
     });
 
-  program.parse(process.argv);
+  await program.parseAsync(process.argv);
 }

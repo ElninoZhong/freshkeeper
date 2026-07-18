@@ -16,4 +16,9 @@ describe('fetchReleaseNotes', () => {
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404 } as any);
     expect(await fetchReleaseNotes('owner/missing')).toBeNull();
   });
+
+  it('returns null when the network request rejects', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('offline'));
+    expect(await fetchReleaseNotes('owner/offline')).toBeNull();
+  });
 });

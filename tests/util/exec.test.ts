@@ -19,4 +19,15 @@ describe('safeExec', () => {
     expect(r.ok).toBe(false);
     expect(r.error).toBeDefined();
   });
+
+  it('passes input directly to the child process', async () => {
+    const r = await safeExec(
+      'node',
+      ['-e', 'process.stdin.setEncoding("utf8"); let s=""; process.stdin.on("data", c => s += c); process.stdin.on("end", () => console.log(s));'],
+      { input: 'safe stdin' }
+    );
+
+    expect(r.ok).toBe(true);
+    expect(r.stdout.trim()).toBe('safe stdin');
+  });
 });

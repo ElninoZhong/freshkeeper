@@ -9,8 +9,8 @@ describe('skills-cli adapter', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     delete process.env.FRESHKEEPER_SKILLS_BIN;
+    delete process.env.FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE;
     process.env.FRESHKEEPER_SKILLS_CWD = mkdtempSync(join(tmpdir(), 'freshkeeper-skills-empty-'));
-    process.env.FRESHKEEPER_SKILLS_DISABLE_CACHE = '1';
   });
 
   it('detects via local `skills --version` before using npx', async () => {
@@ -21,30 +21,39 @@ describe('skills-cli adapter', () => {
     expect(exec.safeExec).toHaveBeenCalledWith('skills', ['--version'], expect.any(Object));
   });
 
-  it('update runs the resolved skills command', async () => {
-    const spy = vi.spyOn(exec, 'safeExec').mockResolvedValue({ ok: true, stdout: '✓ Updated 18 skill(s)', stderr: '' });
+  it('fails closed when no skills-lock.json exists', async () => {
+    const spy = vi.spyOn(exec, 'safeExec').mockRejectedValue(new Error('safeExec must not be called'));
     const r = await skillsCliAdapter.update();
-    expect(spy).toHaveBeenLastCalledWith('skills', ['update', '-y'], expect.any(Object));
-    expect(r.updated.length).toBeGreaterThan(0);
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(r.updated).toEqual([]);
+    expect(r.failed).toEqual([]);
+    expect(r.logs).toContain('Skipped');
   });
 
-  it('parses skill count from output', async () => {
+  it('runs a global update only with explicit opt-in', async () => {
+    delete process.env.FRESHKEEPER_SKILLS_CWD;
+    process.env.FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE = '1';
     vi.spyOn(exec, 'safeExec').mockResolvedValue({ ok: true, stdout: '✓ Updated 18 skill(s)', stderr: '' });
     const r = await skillsCliAdapter.update();
+
     expect(r.logs).toContain('18');
+    expect(r.updated).toEqual(['18 skills']);
   });
 
-  it('falls back to npx when the local skills binary is missing', async () => {
+  it('falls back to a pinned npx package when the local skills binary is missing', async () => {
+    delete process.env.FRESHKEEPER_SKILLS_CWD;
+    process.env.FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE = '1';
     const spy = vi.spyOn(exec, 'safeExec').mockImplementation(async (cmd, args) => {
       if (cmd === 'skills') return { ok: false, stdout: '', stderr: '', error: 'ENOENT' };
-      if (cmd === 'npx' && args.join(' ') === 'skills --version') return { ok: true, stdout: '1.5.2', stderr: '' };
-      if (cmd === 'npx' && args.join(' ') === 'skills update -y') return { ok: true, stdout: '✓ Updated 2 skill(s)', stderr: '' };
+      if (cmd === 'npx' && args.join(' ') === '--yes skills@1.5.16 --version') return { ok: true, stdout: '1.5.16', stderr: '' };
+      if (cmd === 'npx' && args.join(' ') === '--yes skills@1.5.16 update -y') return { ok: true, stdout: '✓ Updated 2 skill(s)', stderr: '' };
       return { ok: false, stdout: '', stderr: '', error: 'unexpected command' };
     });
 
     const r = await skillsCliAdapter.update();
-    expect(spy).toHaveBeenCalledWith('npx', ['skills', '--version'], expect.any(Object));
-    expect(spy).toHaveBeenLastCalledWith('npx', ['skills', 'update', '-y'], expect.any(Object));
+    expect(spy).toHaveBeenCalledWith('npx', ['--yes', 'skills@1.5.16', '--version'], expect.any(Object));
+    expect(spy).toHaveBeenLastCalledWith('npx', ['--yes', 'skills@1.5.16', 'update', '-y'], expect.any(Object));
     expect(r.updated).toEqual(['2 skills']);
   });
 
@@ -59,6 +68,8 @@ describe('skills-cli adapter', () => {
   });
 
   it('reports a useful update error when no skills CLI works', async () => {
+    delete process.env.FRESHKEEPER_SKILLS_CWD;
+    process.env.FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE = '1';
     vi.spyOn(exec, 'safeExec').mockResolvedValue({ ok: false, stdout: '', stderr: '', error: 'timeout' });
 
     const r = await skillsCliAdapter.update();
@@ -66,6 +77,19 @@ describe('skills-cli adapter', () => {
     expect(r.updated).toHaveLength(0);
     expect(r.failed[0].error).toContain('skills CLI unavailable');
     expect(r.failed[0].error).toContain('npx skills');
+  });
+
+  it('fails closed when skills-lock.json is malformed', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'freshkeeper-skills-malformed-'));
+    process.env.FRESHKEEPER_SKILLS_CWD = cwd;
+    writeFileSync(join(cwd, 'skills-lock.json'), '{not-json');
+    const spy = vi.spyOn(exec, 'safeExec').mockRejectedValue(new Error('safeExec must not be called'));
+
+    const r = await skillsCliAdapter.update();
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(r.updated).toEqual([]);
+    expect(r.failed[0]).toMatchObject({ item: 'skills-lock.json' });
   });
 
   it('refreshes github project skills from skills-lock.json', async () => {

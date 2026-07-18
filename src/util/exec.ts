@@ -11,12 +11,13 @@ export interface ExecResult {
 export async function safeExec(
   cmd: string,
   args: string[],
-  opts?: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number }
+  opts?: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number; input?: string }
 ): Promise<ExecResult> {
   try {
     const r = await execa(cmd, args, {
       cwd: opts?.cwd,
       env: opts?.env,
+      input: opts?.input,
       reject: false,
       timeout: opts?.timeoutMs
     });

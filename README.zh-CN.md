@@ -41,7 +41,7 @@ npx freshkeeper@latest init
 |---|---|---|---|
 | `claude-code` | Claude Code CLI | 官方安装器 | `claude update` |
 | `claude-plugins` | Claude Code Plugins | 通过 `claude plugin install` 安装 | 每个插件用 `claude plugin update <name>` 更新 |
-| `skills-cli` | Skills CLI (`skills.sh`) | `npm i -g skills` 或 `npx skills` | 从 `skills-lock.json` 逐个刷新 GitHub skill 到 Universal/shared 技能库；没有 lockfile 时回退到 `skills update -y` |
+| `skills-cli` | Skills CLI (`skills.sh`) | `npm i -g skills` 或固定版本的 `npx` 回退 | 只刷新有效 `skills-lock.json` 中列出的 GitHub skill；lock 缺失或损坏时 fail closed |
 | `codex` | OpenAI Codex CLI | Claude 插件 `codex@openai-codex` | `claude plugin update codex@openai-codex` |
 | `openclaw` | OpenClaw | `npm install -g openclaw@latest` | `openclaw update --channel stable` + `openclaw skills update` |
 | `hermes` | Hermes Agent | `curl` 安装脚本 | `hermes update` + `hermes skills update` |
@@ -57,21 +57,32 @@ npx freshkeeper@latest init
 }
 ```
 
+`enabledAdapters` 是真实执行边界：未写入数组的 adapter 不会被检测或更新；未知 ID 会明确报错，不会静默忽略。
+
+### Skills 安全规则
+
+- Freshkeeper 会从当前目录向上寻找最近的 `skills-lock.json`；也可以用 `FRESHKEEPER_SKILLS_CWD` 显式指定。
+- 没有 lock 时安全跳过；lock 格式错误时报告失败，绝不会扩大更新范围。
+- 只有显式设置 `FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE=1`，才允许执行宽泛的 `skills update -y`。
+- 自动 npx 回退使用固定版本的 Skills CLI，不再选择 npm 缓存里修改时间最新的副本。
+
 ## 定时更新
 ```bash
 freshkeeper schedule "0 10 * * 1"   # 每周一上午 10 点
 freshkeeper schedule off            # 删除定时任务
 ```
 
+Freshkeeper 会校验单行 cron 表达式，保留其它 crontab 内容，并通过 stdin 写入托管区块，不再拼接 shell 命令。
+
 ## 常见问题
 **Q：这会取代 `claude plugin update` 或 `npx skills update` 吗？**  
 A：不会。Freshkeeper 只是把这些原本就有的命令打包起来，集中一次跑完。
 
 **Q：Freshkeeper 怎么更新项目里的 skills？**  
-A：如果找到 `skills-lock.json`，它会对每个 GitHub 来源的 skill 执行 `skills add <source> --skill <name> --agent universal -y`。这样会限定刷新到 Universal/shared 技能库，避免误更新 Claude、Trae 等 agent 专属目录。
+A：只有找到有效 `skills-lock.json` 时，才会对其中 GitHub 来源的 skill 执行 `skills add <source> --skill <name> --agent universal -y`。没有 lock 就不写 skills；全局刷新必须显式设置环境变量授权。
 
 **Q：可以放心开自动运行吗？**  
-A：可以。这里执行的更新命令，和你平时手动输入的是同一套；Freshkeeper 只是按顺序帮你跑，并把输出记录下来。
+A：先配置好 `enabledAdapters`，并确认每个启用的更新器都符合你的预期。Skills lock 与 crontab 现在会 fail closed，但启用的 adapter 仍然会执行真实的第三方更新命令。
 
 **Q：那 Cursor / Windsurf / Aider 呢？**  
 A：已经在 v1.1 的路线图里。

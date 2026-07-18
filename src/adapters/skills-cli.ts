@@ -1,23 +1,10 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { safeExec } from '../util/exec.js';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
 import type { Adapter } from './types.js';
 
 const SKILLS_TIMEOUT_MS = 8_000;
-
-function resolveProjectDir(): string | undefined {
-  if (process.env.FRESHKEEPER_SKILLS_CWD) {
-    const explicitPath = process.env.FRESHKEEPER_SKILLS_CWD;
-    return existsSync(join(explicitPath, 'skills-lock.json')) ? explicitPath : undefined;
-  }
-
-  const candidates = [
-    process.cwd(),
-    join(homedir(), 'Documents/Claude')
-  ].filter(Boolean) as string[];
-  return candidates.find((p) => existsSync(join(p, 'skills-lock.json')));
-}
+const PINNED_SKILLS_NPX_PACKAGE = 'skills@1.5.16';
 
 interface SkillsCommand {
   cmd: string;
@@ -30,17 +17,65 @@ interface ProjectSkill {
   source: string;
 }
 
-function cachedSkillsCli(): string | undefined {
-  const npxDir = join(homedir(), '.npm', '_npx');
-  if (!existsSync(npxDir)) return undefined;
+type SkillsUpdatePlan =
+  | { kind: 'project'; cwd: string; skills: ProjectSkill[] }
+  | { kind: 'global' }
+  | { kind: 'skip'; reason: string }
+  | { kind: 'error'; error: string };
 
-  const candidates = readdirSync(npxDir)
-    .map((entry) => join(npxDir, entry, 'node_modules', 'skills', 'bin', 'cli.mjs'))
-    .filter((entry) => existsSync(entry))
-    .map((entry) => ({ entry, mtimeMs: statSync(entry).mtimeMs }))
-    .sort((a, b) => b.mtimeMs - a.mtimeMs);
+function findLockDirectory(start: string): string | undefined {
+  let current = resolve(start);
+  while (true) {
+    if (existsSync(join(current, 'skills-lock.json'))) return current;
+    const parent = dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
+}
 
-  return candidates[0]?.entry;
+function projectSkills(cwd: string): SkillsUpdatePlan {
+  const lockPath = join(cwd, 'skills-lock.json');
+  try {
+    const parsed = JSON.parse(readFileSync(lockPath, 'utf-8')) as {
+      skills?: Record<string, { source?: string; sourceType?: string; skillPath?: string }>;
+    };
+    if (!parsed.skills || typeof parsed.skills !== 'object' || Array.isArray(parsed.skills)) {
+      return { kind: 'error', error: `${lockPath} does not contain a valid skills object` };
+    }
+
+    const skills = Object.entries(parsed.skills)
+      .filter(([, entry]) => entry.sourceType === 'github' && typeof entry.source === 'string' && entry.source.length > 0)
+      .map(([name, entry]) => ({ name, source: entry.source as string }));
+
+    if (skills.length === 0) {
+      return { kind: 'skip', reason: `Skipped skills update: ${lockPath} has no GitHub-backed skills.` };
+    }
+    return { kind: 'project', cwd, skills };
+  } catch (error) {
+    return {
+      kind: 'error',
+      error: `Unable to parse ${lockPath}: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}
+
+function resolveSkillsUpdatePlan(): SkillsUpdatePlan {
+  const explicitCwd = process.env.FRESHKEEPER_SKILLS_CWD;
+  if (explicitCwd) {
+    const cwd = resolve(explicitCwd);
+    if (!existsSync(join(cwd, 'skills-lock.json'))) {
+      return { kind: 'skip', reason: `Skipped skills update: no skills-lock.json in ${cwd}.` };
+    }
+    return projectSkills(cwd);
+  }
+
+  const discovered = findLockDirectory(process.cwd());
+  if (discovered) return projectSkills(discovered);
+  if (process.env.FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE === '1') return { kind: 'global' };
+  return {
+    kind: 'skip',
+    reason: 'Skipped global skills update. Set FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE=1 to opt in explicitly.'
+  };
 }
 
 function skillsCommands(): SkillsCommand[] {
@@ -55,17 +90,11 @@ function skillsCommands(): SkillsCommand[] {
   }
 
   commands.push({ cmd: 'skills', argsPrefix: [], label: 'skills' });
-
-  const cached = process.env.FRESHKEEPER_SKILLS_DISABLE_CACHE === '1' ? undefined : cachedSkillsCli();
-  if (cached) {
-    commands.push({
-      cmd: process.execPath,
-      argsPrefix: [cached],
-      label: 'cached skills CLI'
-    });
-  }
-
-  commands.push({ cmd: 'npx', argsPrefix: ['skills'], label: 'npx skills' });
+  commands.push({
+    cmd: 'npx',
+    argsPrefix: ['--yes', PINNED_SKILLS_NPX_PACKAGE],
+    label: `npx ${PINNED_SKILLS_NPX_PACKAGE}`
+  });
   return commands;
 }
 
@@ -73,38 +102,20 @@ async function resolveSkillsCommand(): Promise<{ command?: SkillsCommand; versio
   const errors: string[] = [];
 
   for (const command of skillsCommands()) {
-    const r = await safeExec(command.cmd, [...command.argsPrefix, '--version'], { timeoutMs: SKILLS_TIMEOUT_MS });
-    if (r.ok) {
+    const result = await safeExec(command.cmd, [...command.argsPrefix, '--version'], { timeoutMs: SKILLS_TIMEOUT_MS });
+    if (result.ok) {
       return {
         command,
-        version: r.stdout.trim().split('\n').pop(),
+        version: result.stdout.trim().split('\n').pop(),
         errors
       };
     }
 
-    const message = r.error || r.stderr || `exit ${r.exitCode ?? 'unknown'}`;
+    const message = result.error || result.stderr || `exit ${result.exitCode ?? 'unknown'}`;
     errors.push(`${command.label}: ${message}`);
   }
 
   return { errors };
-}
-
-function githubProjectSkills(cwd: string | undefined): ProjectSkill[] {
-  if (!cwd) return [];
-  const lockPath = join(cwd, 'skills-lock.json');
-  if (!existsSync(lockPath)) return [];
-
-  try {
-    const parsed = JSON.parse(readFileSync(lockPath, 'utf-8')) as {
-      skills?: Record<string, { source?: string; sourceType?: string; skillPath?: string }>;
-    };
-
-    return Object.entries(parsed.skills ?? {})
-      .filter(([, entry]) => entry.sourceType === 'github' && entry.source)
-      .map(([name, entry]) => ({ name, source: entry.source as string }));
-  } catch {
-    return [];
-  }
 }
 
 export const skillsCliAdapter: Adapter = {
@@ -112,9 +123,9 @@ export const skillsCliAdapter: Adapter = {
   displayName: 'Skills CLI (skills.sh)',
 
   async detect() {
-    const resolved = await resolveSkillsCommand();
-    if (!resolved.command) return { installed: false };
-    return { installed: true, version: resolved.version };
+    const resolvedCommand = await resolveSkillsCommand();
+    if (!resolvedCommand.command) return { installed: false };
+    return { installed: true, version: resolvedCommand.version };
   },
 
   async check() {
@@ -122,30 +133,38 @@ export const skillsCliAdapter: Adapter = {
   },
 
   async update() {
-    const cwd = resolveProjectDir();
-    const resolved = await resolveSkillsCommand();
-    if (!resolved.command) {
+    const plan = resolveSkillsUpdatePlan();
+    if (plan.kind === 'skip') return { updated: [], failed: [], logs: plan.reason };
+    if (plan.kind === 'error') {
+      return {
+        updated: [],
+        failed: [{ item: 'skills-lock.json', error: plan.error }],
+        logs: ''
+      };
+    }
+
+    const resolvedCommand = await resolveSkillsCommand();
+    if (!resolvedCommand.command) {
       return {
         updated: [],
         failed: [{
           item: 'skills',
-          error: `skills CLI unavailable. Tried: ${resolved.errors.join('; ')}`
+          error: `skills CLI unavailable. Tried: ${resolvedCommand.errors.join('; ')}`
         }],
         logs: ''
       };
     }
 
-    const projectSkills = githubProjectSkills(cwd);
-    if (projectSkills.length > 0) {
+    if (plan.kind === 'project') {
       const failed: { item: string; error: string }[] = [];
       let refreshed = 0;
-      let logs = `Refreshing ${projectSkills.length} project skill(s) from skills-lock.json...\n`;
+      let logs = `Refreshing ${plan.skills.length} project skill(s) from skills-lock.json...\n`;
 
-      for (const skill of projectSkills) {
+      for (const skill of plan.skills) {
         const refresh = await safeExec(
-          resolved.command.cmd,
-          [...resolved.command.argsPrefix, 'add', skill.source, '--skill', skill.name, '--agent', 'universal', '-y'],
-          { cwd, timeoutMs: 120_000 }
+          resolvedCommand.command.cmd,
+          [...resolvedCommand.command.argsPrefix, 'add', skill.source, '--skill', skill.name, '--agent', 'universal', '-y'],
+          { cwd: plan.cwd, timeoutMs: 120_000 }
         );
 
         logs += `\n[skill:${skill.name}]\n${refresh.stdout}${refresh.stderr ? `\n${refresh.stderr}` : ''}\n`;
@@ -166,19 +185,19 @@ export const skillsCliAdapter: Adapter = {
       };
     }
 
-    const r = await safeExec(
-      resolved.command.cmd,
-      [...resolved.command.argsPrefix, 'update', '-y'],
-      { cwd, timeoutMs: 300_000 }
+    const result = await safeExec(
+      resolvedCommand.command.cmd,
+      [...resolvedCommand.command.argsPrefix, 'update', '-y'],
+      { timeoutMs: 300_000 }
     );
-    const count = r.stdout.match(/Updated\s+(\d+)\s+skill/)?.[1];
+    const count = result.stdout.match(/Updated\s+(\d+)\s+skill/)?.[1];
     const updated = count ? [`${count} skills`] : [];
-    const failed = r.ok ? [] : [{ item: 'skills', error: r.stderr || r.error || 'update failed' }];
+    const failed = result.ok ? [] : [{ item: 'skills', error: result.stderr || result.error || 'update failed' }];
 
     return {
       updated,
       failed,
-      logs: r.stdout
+      logs: result.stdout
     };
   }
 };

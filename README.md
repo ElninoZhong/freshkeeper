@@ -36,7 +36,7 @@ Freshkeeper detects which supported agents are already installed on your machine
 |---|---|---|---|
 | `claude-code` | Claude Code CLI | official installer | `claude update` |
 | `claude-plugins` | Claude Code Plugins | via `claude plugin install` | each plugin via `claude plugin update <name>` |
-| `skills-cli` | Skills CLI (`skills.sh`) | `npm i -g skills` or `npx skills` | Refresh GitHub skills from `skills-lock.json` into the Universal/shared skills library; falls back to `skills update -y` when no lockfile is found |
+| `skills-cli` | Skills CLI (`skills.sh`) | `npm i -g skills` or pinned `npx` fallback | Refresh GitHub skills listed by a valid `skills-lock.json`; missing or malformed locks fail closed |
 | `codex` | OpenAI Codex CLI | Claude plugin `codex@openai-codex` | `claude plugin update codex@openai-codex` |
 | `openclaw` | OpenClaw | `npm install -g openclaw@latest` | `openclaw update --channel stable` + `openclaw skills update` |
 | `hermes` | Hermes Agent | `curl` install script | `hermes update` + `hermes skills update` |
@@ -52,21 +52,32 @@ Location: `~/.freshkeeper/config.json`
 }
 ```
 
+`enabledAdapters` is authoritative: adapters omitted from this array are not detected or updated. Unknown adapter IDs fail visibly instead of being ignored.
+
+### Skills safety
+
+- Freshkeeper searches from the current directory upward for the nearest `skills-lock.json`. Set `FRESHKEEPER_SKILLS_CWD` to select one explicitly.
+- A missing lock safely skips the skills update. A malformed lock reports a failure and never widens scope.
+- A broad `skills update -y` runs only when `FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE=1` is explicitly set.
+- The automatic npx fallback uses a pinned Skills CLI package instead of whichever cached copy has the newest timestamp.
+
 ## Schedule
 ```bash
 freshkeeper schedule "0 10 * * 1"   # every Monday 10am
 freshkeeper schedule off            # remove
 ```
 
+Freshkeeper validates a single-line cron expression, preserves unrelated entries, and writes the managed block to `crontab -` through stdin without constructing a shell command.
+
 ## FAQ
 **Q: Does this replace `claude plugin update` or `npx skills update`?**  
 A: No. It wraps and batches them.
 
 **Q: How does Freshkeeper update project skills?**  
-A: When it finds a `skills-lock.json`, it refreshes each GitHub-backed skill with `skills add <source> --skill <name> --agent universal -y`. This keeps shared skills scoped to the Universal library and avoids accidentally updating every agent-specific skills directory.
+A: When it finds a valid `skills-lock.json`, it refreshes each GitHub-backed skill with `skills add <source> --skill <name> --agent universal -y`. No lock means no skills write; global refresh requires an explicit environment opt-in.
 
 **Q: Is it safe to run automatically?**  
-A: Yes. Every update command shown is the same one you would run manually; Freshkeeper just runs them in sequence and logs the output.
+A: Configure `enabledAdapters` first and review every updater you enable. Freshkeeper now fails closed around skill locks and crontab writes, but enabled adapters still run real third-party update commands.
 
 **Q: What about Cursor / Windsurf / Aider?**  
 A: On the roadmap for v1.1.
