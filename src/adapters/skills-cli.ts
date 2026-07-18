@@ -33,7 +33,7 @@ function findLockDirectory(start: string): string | undefined {
   }
 }
 
-function projectSkills(cwd: string): SkillsUpdatePlan {
+function buildProjectSkillsUpdatePlan(cwd: string): SkillsUpdatePlan {
   const lockPath = join(cwd, 'skills-lock.json');
   try {
     const parsed = JSON.parse(readFileSync(lockPath, 'utf-8')) as {
@@ -43,9 +43,20 @@ function projectSkills(cwd: string): SkillsUpdatePlan {
       return { kind: 'error', error: `${lockPath} does not contain a valid skills object` };
     }
 
-    const skills = Object.entries(parsed.skills)
-      .filter(([, entry]) => entry.sourceType === 'github' && typeof entry.source === 'string' && entry.source.length > 0)
-      .map(([name, entry]) => ({ name, source: entry.source as string }));
+    const skills: ProjectSkill[] = [];
+    for (const [name, entry] of Object.entries(parsed.skills)) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        return { kind: 'error', error: `${lockPath} contains an invalid entry for ${name}` };
+      }
+      if (typeof entry.sourceType !== 'string' || entry.sourceType.length === 0) {
+        return { kind: 'error', error: `${lockPath} entry ${name} has no valid sourceType` };
+      }
+      if (entry.sourceType !== 'github') continue;
+      if (typeof entry.source !== 'string' || entry.source.length === 0) {
+        return { kind: 'error', error: `${lockPath} GitHub entry ${name} has no valid source` };
+      }
+      skills.push({ name, source: entry.source });
+    }
 
     if (skills.length === 0) {
       return { kind: 'skip', reason: `Skipped skills update: ${lockPath} has no GitHub-backed skills.` };
@@ -66,11 +77,11 @@ function resolveSkillsUpdatePlan(): SkillsUpdatePlan {
     if (!existsSync(join(cwd, 'skills-lock.json'))) {
       return { kind: 'skip', reason: `Skipped skills update: no skills-lock.json in ${cwd}.` };
     }
-    return projectSkills(cwd);
+    return buildProjectSkillsUpdatePlan(cwd);
   }
 
   const discovered = findLockDirectory(process.cwd());
-  if (discovered) return projectSkills(discovered);
+  if (discovered) return buildProjectSkillsUpdatePlan(discovered);
   if (process.env.FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE === '1') return { kind: 'global' };
   return {
     kind: 'skip',
@@ -78,7 +89,7 @@ function resolveSkillsUpdatePlan(): SkillsUpdatePlan {
   };
 }
 
-function skillsCommands(): SkillsCommand[] {
+function skillsCommands(includeNpx = true): SkillsCommand[] {
   const commands: SkillsCommand[] = [];
 
   if (process.env.FRESHKEEPER_SKILLS_BIN) {
@@ -90,18 +101,20 @@ function skillsCommands(): SkillsCommand[] {
   }
 
   commands.push({ cmd: 'skills', argsPrefix: [], label: 'skills' });
-  commands.push({
-    cmd: 'npx',
-    argsPrefix: ['--yes', PINNED_SKILLS_NPX_PACKAGE],
-    label: `npx ${PINNED_SKILLS_NPX_PACKAGE}`
-  });
+  if (includeNpx) {
+    commands.push({
+      cmd: 'npx',
+      argsPrefix: ['--yes', PINNED_SKILLS_NPX_PACKAGE],
+      label: `npx ${PINNED_SKILLS_NPX_PACKAGE}`
+    });
+  }
   return commands;
 }
 
-async function resolveSkillsCommand(): Promise<{ command?: SkillsCommand; version?: string; errors: string[] }> {
+async function resolveSkillsCommand(includeNpx = true): Promise<{ command?: SkillsCommand; version?: string; errors: string[] }> {
   const errors: string[] = [];
 
-  for (const command of skillsCommands()) {
+  for (const command of skillsCommands(includeNpx)) {
     const result = await safeExec(command.cmd, [...command.argsPrefix, '--version'], { timeoutMs: SKILLS_TIMEOUT_MS });
     if (result.ok) {
       return {
@@ -123,9 +136,16 @@ export const skillsCliAdapter: Adapter = {
   displayName: 'Skills CLI (skills.sh)',
 
   async detect() {
-    const resolvedCommand = await resolveSkillsCommand();
-    if (!resolvedCommand.command) return { installed: false };
-    return { installed: true, version: resolvedCommand.version };
+    const localCommand = await resolveSkillsCommand(false);
+    if (localCommand.command) return { installed: true, version: localCommand.version };
+
+    const npx = await safeExec('npx', ['--version'], { timeoutMs: SKILLS_TIMEOUT_MS });
+    if (!npx.ok) return { installed: false };
+    return {
+      installed: true,
+      version: PINNED_SKILLS_NPX_PACKAGE,
+      installMethod: 'pinned-npx'
+    };
   },
 
   async check() {

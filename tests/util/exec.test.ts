@@ -1,33 +1,69 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { execa } from 'execa';
 import { safeExec } from '../../src/util/exec.js';
 
+vi.mock('execa', () => ({ execa: vi.fn() }));
+
+const mockedExeca = vi.mocked(execa);
+
 describe('safeExec', () => {
+  beforeEach(() => {
+    mockedExeca.mockReset();
+  });
+
   it('returns stdout on success', async () => {
-    const r = await safeExec('node', ['-e', 'console.log("hi")']);
+    mockedExeca.mockResolvedValue({
+      exitCode: 0,
+      failed: false,
+      stdout: 'hi\n',
+      stderr: ''
+    } as never);
+
+    const r = await safeExec('example', ['--version']);
+
     expect(r.ok).toBe(true);
     expect(r.stdout.trim()).toBe('hi');
   });
 
   it('returns ok=false on non-zero exit', async () => {
-    const r = await safeExec('node', ['-e', 'process.exit(2)']);
+    mockedExeca.mockResolvedValue({
+      exitCode: 2,
+      failed: true,
+      shortMessage: 'Command failed',
+      stdout: '',
+      stderr: 'bad'
+    } as never);
+
+    const r = await safeExec('example', []);
+
     expect(r.ok).toBe(false);
     expect(r.exitCode).toBe(2);
   });
 
   it('returns ok=false when binary missing', async () => {
-    const r = await safeExec('this-binary-does-not-exist-xyz', []);
+    mockedExeca.mockRejectedValue(new Error('ENOENT'));
+
+    const r = await safeExec('missing', []);
+
     expect(r.ok).toBe(false);
-    expect(r.error).toBeDefined();
+    expect(r.error).toBe('ENOENT');
   });
 
   it('passes input directly to the child process', async () => {
+    mockedExeca.mockResolvedValue({
+      exitCode: 0,
+      failed: false,
+      stdout: '',
+      stderr: ''
+    } as never);
+
     const r = await safeExec(
-      'node',
-      ['-e', 'process.stdin.setEncoding("utf8"); let s=""; process.stdin.on("data", c => s += c); process.stdin.on("end", () => console.log(s));'],
+      'crontab',
+      ['-'],
       { input: 'safe stdin' }
     );
 
     expect(r.ok).toBe(true);
-    expect(r.stdout.trim()).toBe('safe stdin');
+    expect(mockedExeca).toHaveBeenCalledWith('crontab', ['-'], expect.objectContaining({ input: 'safe stdin' }));
   });
 });

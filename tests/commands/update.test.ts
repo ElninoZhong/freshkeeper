@@ -1,7 +1,31 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { Registry } from '../../src/adapters/registry.js';
-import { runUpdate } from '../../src/commands/update.js';
+import { printUpdate, runUpdate } from '../../src/commands/update.js';
 import type { Adapter } from '../../src/adapters/types.js';
+
+vi.mock('ora', () => ({
+  default: vi.fn(() => ({
+    start: vi.fn().mockReturnThis(),
+    stop: vi.fn()
+  }))
+}));
+
+vi.mock('../../src/changelog/aggregate.js', () => ({
+  aggregateChangelog: vi.fn().mockResolvedValue([]),
+  ADAPTER_REPOS: {}
+}));
+
+let previousExitCode: number | undefined;
+
+beforeEach(() => {
+  previousExitCode = process.exitCode;
+  process.exitCode = undefined;
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  process.exitCode = previousExitCode;
+});
 
 const mkAdapter = (id: string, updated: string[], failed: any[] = []): Adapter => ({
   id, displayName: id,
@@ -25,5 +49,17 @@ describe('update command', () => {
     r.register(mkAdapter('a', [], [{ item: 'x', error: 'boom' }]));
     const report = await runUpdate(r);
     expect(report.totalFailed).toBe(1);
+  });
+
+  it('sets a failing process exit code when any adapter update fails', async () => {
+    const r = new Registry();
+    r.register(mkAdapter('a', [], [{ item: 'x', error: 'boom' }]));
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const report = await printUpdate(r);
+
+    expect(report.totalFailed).toBe(1);
+    expect(process.exitCode).toBe(1);
   });
 });
