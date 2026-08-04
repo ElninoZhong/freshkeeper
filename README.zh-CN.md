@@ -36,7 +36,7 @@ npx skills add ElninoZhong/freshkeeper --skill freshkeeper-check -g -y
 npx skills add ElninoZhong/freshkeeper --skill freshkeeper-update -g -y
 ```
 
-用 `$freshkeeper-check` 做简洁的只读检查，用 `$freshkeeper-check with details` 查看已安装版本和可更新明细，用 `$freshkeeper-update` 执行真实更新。详细模式实际运行 `freshkeeper list` 和 `freshkeeper check`；`with details` 不是传给 CLI 的字面参数。把检查和更新拆开后，只读请求不会被悄悄扩大成修改操作。
+这两条 Agent Skill 管理的是用户已经安装的 Skill 库，不是 Freshkeeper CLI，也不是 AI coding 工具本体。用 `$freshkeeper-check` 只读盘点并核对上游，用 `$freshkeeper-check with details` 查看每个 Skill 的来源和状态，用 `$freshkeeper-update` 先备份共享库，再更新所有有可追踪来源的已安装 Skill。本地和无来源 Skill 会保留并明确报告，不会猜仓库后覆盖。
 
 ## 命令
 | 命令 | 作用 |
@@ -115,7 +115,7 @@ A：已经在 v1.1 的路线图里。
 正在推进，欢迎在 issue 里一起讨论。
 
 - [x] [#1 项目级 lockfile 支持](https://github.com/ElninoZhong/freshkeeper/issues/1)——按项目锁定、恢复并遵守 Claude Code、plugin、Skills CLI 与 GitHub skill 的精确版本
-- [x] 独立可安装的 `freshkeeper-check` 与 `freshkeeper-update` Agent Skills——明确隔离只读检查和真实更新
+- [x] 面向用户已安装 Skill 库的 `freshkeeper-check` 与 `freshkeeper-update` Agent Skills——带备份和非破坏边界
 - [ ] Cursor / Windsurf / Aider / Gemini CLI 适配器（v1.1）
 - [ ] 更新完自动发 macOS 原生通知
 - [ ] Windows 支持（走 Task Scheduler）

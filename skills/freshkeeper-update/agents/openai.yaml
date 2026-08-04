@@ -1,4 +1,4 @@
 interface:
   display_name: "Freshkeeper Update"
-  short_description: "Update enabled AI tools and report results safely"
-  default_prompt: "Use $freshkeeper-update to update all enabled AI tools and report what changed."
+  short_description: "Safely update every source-tracked installed Skill"
+  default_prompt: "Use $freshkeeper-update to back up the shared library and update every source-tracked installed Skill safely."

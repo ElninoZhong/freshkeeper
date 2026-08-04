@@ -3,26 +3,27 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "$freshkeeper-update，把这台电脑上 Freshkeeper 已启用的 AI coding 工具更新掉。",
-      "expected_output": "Inspect the Freshkeeper config and skills lock boundary, then run exactly freshkeeper update and report updated, skipped, and failed adapters.",
+      "prompt": "$freshkeeper-update，把共享库里所有能追踪来源的 Skill 更新掉，本地自建的不要碰。",
+      "expected_output": "Inventory and back up the shared library, run the global Skills CLI update, refresh only previously installed well-known Skills, verify the post-update inventory, and skip local or untracked Skills.",
       "files": [],
       "expectations": [
-        "Treats the explicit invocation as authorization for freshkeeper update",
-        "Inspects enabled adapters before the mutation",
-        "Runs freshkeeper update rather than check, init, restore, or schedule",
-        "Separates updated, skipped, and failed results"
+        "Targets the shared/global installed Skill library",
+        "Creates and verifies a recovery copy before mutation",
+        "Runs skills update with explicit global non-interactive scope",
+        "Preserves local and untracked Skills",
+        "Does not update AI coding tool binaries or plugins"
       ]
     },
     {
       "id": 2,
-      "prompt": "freshkeeper update。项目里没有 skills-lock.json，其他工具照常更新，但不要擅自全局刷新我的共享 skills。",
-      "expected_output": "Run freshkeeper update while allowing the skills adapter to skip safely and without setting FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE=1.",
+      "prompt": "freshkeeper update。上游如果删了某个 Skill，不要跟着删；也不要顺便安装仓库里新出现的 Skill。",
+      "expected_output": "Update only pre-existing source-tracked Skill names in non-interactive mode, skip upstream deletions, avoid --all, and verify no pre-update Skill disappeared.",
       "files": [],
       "expectations": [
-        "Runs the requested Freshkeeper update",
-        "Treats a missing skills lock as a safe skills skip",
-        "Does not opt into a broad global skills update",
-        "Does not modify scheduling or lockfiles"
+        "Does not delete Skills removed upstream",
+        "Does not use --all or add newly discovered Skills",
+        "Compares the full inventory before and after",
+        "Restores and reports any pre-existing Skill that disappears"
       ]
     }
   ]

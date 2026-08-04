@@ -1,72 +1,64 @@
 ---
 name: freshkeeper-check
-description: Check Freshkeeper-supported AI coding tools for pending updates without installing or changing anything. Use when the user says `freshkeeper check`, invokes `$freshkeeper-check`, asks whether Claude Code, Codex, OpenClaw, Hermes, plugins, or skills have updates, or asks for `freshkeeper check with details`, a detailed version report, current-versus-latest versions, skipped adapters, or check limitations.
+description: Check every Skill installed in the user's shared/global Skill library for upstream updates without changing any Skill. Use when the user invokes `$freshkeeper-check`, says `freshkeeper check`, asks whether their installed Skills are current, or asks for `freshkeeper check with details`, source coverage, update availability, untracked Skills, or a per-Skill status report. This Skill checks Skills, not Freshkeeper itself or AI coding tool binaries.
 ---
 
 # Freshkeeper Check
 
-Run only Freshkeeper's read-only inspection path. Never turn a check into an update, initialization, restore, lock, or schedule change.
+Inspect the user's installed Skills. Do not check or update Claude Code, Codex, OpenClaw, Hermes, Freshkeeper itself, plugins, crontab, or project toolchain locks.
+
+## Target the shared library
+
+Use the global/shared Skill library reported by Skills CLI. On this Mac its canonical location is `/Users/elninozhong/.agents/skills`, and Claude sees the same library through `/Users/elninozhong/.claude/skills`.
+
+Treat every top-level directory containing `SKILL.md` as an installed Skill. Use `/Users/elninozhong/.agents/.skill-lock.json` as source metadata when present. Never assume an untracked Skill has a particular upstream repository.
 
 ## Choose the output mode
 
-- For `freshkeeper check`, `$freshkeeper-check`, “检查更新”, or equivalent: run `freshkeeper check` and return a short result.
-- For `freshkeeper check with details`, `$freshkeeper-check with details`, “详细检查”, “完整版本明细”, or equivalent: run `freshkeeper list` followed by `freshkeeper check`, then return an adapter-by-adapter report.
-- Treat `with details` as a Skill output mode. Do not pass those words to the CLI; the CLI has no `with details` argument.
+- `$freshkeeper-check` or `freshkeeper check`: return totals, confirmed updates, coverage gaps, and errors.
+- `$freshkeeper-check with details` or “详细检查”: additionally list every installed Skill with its status, source, and reason.
+- `with details` is an output mode, not a Skills CLI argument.
 
-Both modes are read-only apart from network and command-cache effects of the underlying checks.
+## Run the read-only checker
 
-## Resolve the runner
-
-1. Work from the directory the user placed in scope.
-2. Use `freshkeeper` when installed, after checking `freshkeeper --version`.
-3. When it is absent and the user explicitly invoked this Skill or asked to use Freshkeeper, use `npx --yes freshkeeper@latest` temporarily. Do not install it globally.
-4. If the configured npm mirror has not synchronized a known published version, retry only the Freshkeeper package through `https://registry.npmjs.org/`; preserve the user's normal registry configuration.
-5. Use the same resolved runner for every command in one check.
-
-## Report a normal check
-
-Run:
+Resolve the directory containing this `SKILL.md`, then run:
 
 ```text
-freshkeeper check
+node <skill-directory>/scripts/check-installed-skills.mjs
 ```
 
-Report one of these outcomes concisely:
+For detailed output, add `--details`. Use `--json` only when structured output helps analysis.
 
-- updates available, with the affected items and current-to-latest versions;
-- no pending updates detected;
-- checks that failed.
+The checker:
 
-State Freshkeeper's limitation when relevant: some adapters expose changes only during `update`, so an empty dry-run is not proof that every third-party tool is current.
+1. Inventories the entire shared Skill library.
+2. Reads recorded sources from `.skill-lock.json`.
+3. Groups GitHub-tracked Skills by repository and compares recorded folder tree hashes with current upstream trees.
+4. Marks local, well-known-without-hash, and untracked Skills as uncheckable instead of guessing.
+5. Never writes to the Skill library or lock file.
 
-## Report a detailed check
+## Interpret results honestly
 
-Run, in order:
+Use these meanings:
 
-```text
-freshkeeper list
-freshkeeper check
-```
+- `current`: the recorded installed GitHub folder hash matches upstream.
+- `update-available`: the upstream folder hash changed.
+- `untracked`: the Skill exists locally but has no source entry.
+- `uncheckable`: a source exists but lacks comparable version metadata.
+- `local-only`: the recorded source is local.
+- `missing-upstream` or `check-failed`: report the problem; do not call the Skill current.
 
-Report:
-
-1. Every configured adapter shown by `list`, including installed status and detected version.
-2. Every pending update shown by `check`, including item, current version, and latest version.
-3. Adapters that are absent, skipped, unsupported for dry-run, or failed, without inventing a latest version.
-4. The exact commands and working directory used.
-
-Do not claim “all up to date” for an adapter that cannot expose a dry-run result. Say that no pending update was reported and name the limitation.
+Say “no updates confirmed among checkable Skills,” not “all Skills are current,” when any installed Skill is uncheckable.
 
 ## Safety boundary
 
-- Never run `freshkeeper update`, `freshkeeper init`, `freshkeeper restore`, `freshkeeper lock`, or `freshkeeper schedule` from this Skill.
-- Never set `FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE=1`.
-- Never run raw third-party update commands as a fallback.
-- Never modify `~/.agents/skills`, plugins, versions, lockfiles, configuration, or crontab.
+- Never run `skills update`, `skills add`, `skills remove`, or any Freshkeeper update command.
+- Never modify, delete, reconcile, or prune shared Skills.
+- Never repair missing source metadata by inference.
+- Network access for GitHub comparison is read-only.
 
 ## Invocation examples
 
 - `$freshkeeper-check`
 - `$freshkeeper-check with details`
-- `freshkeeper check，看看有没有更新，不要安装`
-- `freshkeeper check with details，逐项告诉我当前版本和可更新版本`
+- `检查我安装的所有 Skill 有没有更新，不要安装`
