@@ -12,7 +12,7 @@ Status: canonical path migration and Phase 4A safety hardening completed on 2026
 | Shared user skills | `/Users/elninozhong/.agents/skills` | External canonical library; Freshkeeper may touch it only through an explicitly authorized, fail-closed update plan. |
 | Project skill intent | The nearest valid `skills-lock.json`, or `FRESHKEEPER_SKILLS_CWD` | Missing or malformed lock never widens update scope. |
 | Project toolchain intent | The nearest valid `freshkeeper.lock.json` | `restore` and `update --respect-lock` fail closed and verify exact post-state. |
-| Agent Skill source | `skills/freshkeeper/SKILL.md` | Thin natural-language orchestration over the CLI; never a second implementation of update or restore behavior. |
+| Agent Skill sources | `skills/freshkeeper-check/SKILL.md` and `skills/freshkeeper-update/SKILL.md` | Separate read-only inspection from real updates; never become a second implementation of adapter behavior. |
 | Project rules | `AGENTS.md` | Shared rules for all agents. |
 | Domain language | `CONTEXT.md` | Names update concepts and safety invariants. |
 | Claude compatibility | `CLAUDE.md` | Thin pointer only. |

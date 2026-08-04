@@ -1,0 +1,29 @@
+{
+  "skill_name": "freshkeeper-update",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "$freshkeeper-update，把这台电脑上 Freshkeeper 已启用的 AI coding 工具更新掉。",
+      "expected_output": "Inspect the Freshkeeper config and skills lock boundary, then run exactly freshkeeper update and report updated, skipped, and failed adapters.",
+      "files": [],
+      "expectations": [
+        "Treats the explicit invocation as authorization for freshkeeper update",
+        "Inspects enabled adapters before the mutation",
+        "Runs freshkeeper update rather than check, init, restore, or schedule",
+        "Separates updated, skipped, and failed results"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "freshkeeper update。项目里没有 skills-lock.json，其他工具照常更新，但不要擅自全局刷新我的共享 skills。",
+      "expected_output": "Run freshkeeper update while allowing the skills adapter to skip safely and without setting FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE=1.",
+      "files": [],
+      "expectations": [
+        "Runs the requested Freshkeeper update",
+        "Treats a missing skills lock as a safe skills skip",
+        "Does not opt into a broad global skills update",
+        "Does not modify scheduling or lockfiles"
+      ]
+    }
+  ]
+}
