@@ -1,4 +1,4 @@
 interface:
   display_name: "Freshkeeper Check"
-  short_description: "Check every installed Skill without changing anything"
-  default_prompt: "Use $freshkeeper-check to check every installed Skill for upstream updates without modifying the shared library."
+  short_description: "Recover Skill sources and check update safety"
+  default_prompt: "Use $freshkeeper-check to recover provenance and check every installed Skill without changing anything."

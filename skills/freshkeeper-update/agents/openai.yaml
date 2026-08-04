@@ -1,4 +1,4 @@
 interface:
   display_name: "Freshkeeper Update"
-  short_description: "Safely update every source-tracked installed Skill"
-  default_prompt: "Use $freshkeeper-update to back up the shared library and update every source-tracked installed Skill safely."
+  short_description: "Back up and safely update recovered Skill sources"
+  default_prompt: "Use $freshkeeper-update to back up my Skill libraries and safely update recorded or evidence-recovered sources."

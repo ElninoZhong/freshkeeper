@@ -36,7 +36,7 @@ npx skills add ElninoZhong/freshkeeper --skill freshkeeper-check -g -y
 npx skills add ElninoZhong/freshkeeper --skill freshkeeper-update -g -y
 ```
 
-这两条 Agent Skill 管理的是用户已经安装的 Skill 库，不是 Freshkeeper CLI，也不是 AI coding 工具本体。用 `$freshkeeper-check` 只读盘点并核对上游，用 `$freshkeeper-check with details` 查看每个 Skill 的来源和状态，用 `$freshkeeper-update` 先备份共享库，再更新所有有可追踪来源的已安装 Skill。本地和无来源 Skill 会保留并明确报告，不会猜仓库后覆盖。
+这两条 Agent Skill 管理的是用户已经安装的 Skill 库，不是 Freshkeeper CLI，也不是 AI coding 工具本体。它们优先使用 Universal 共享库；如果共享库不存在，就自动检查 Claude Code、Codex、OpenClaw 和 Hermes 各自的用户级 Skill 库。v1.2 起，`$freshkeeper-check` 会从已核验目录和本地证据恢复缺失的 GitHub 来源，比较整个 Skill 目录，并回溯上游历史，把干净旧版与本地定制区分开。`$freshkeeper-update` 会先完整备份，只自动处理能够证明安全的 clean-old 和 current-subset，通过三方校验更新。带本地扩展、需要合并、本地领先或已被上游删除的 Skill 都会保留并单独报告。
 
 ## 命令
 | 命令 | 作用 |
@@ -109,14 +109,14 @@ A：只有找到有效 `skills-lock.json` 时，才会对其中 GitHub 来源的
 A：先配置好 `enabledAdapters`，并确认每个启用的更新器都符合你的预期。Skills lock 与 crontab 现在会 fail closed，但启用的 adapter 仍然会执行真实的第三方更新命令。
 
 **Q：那 Cursor / Windsurf / Aider 呢？**  
-A：已经在 v1.1 的路线图里。
+A：仍在路线图中。
 
 ## 路线图
 正在推进，欢迎在 issue 里一起讨论。
 
 - [x] [#1 项目级 lockfile 支持](https://github.com/ElninoZhong/freshkeeper/issues/1)——按项目锁定、恢复并遵守 Claude Code、plugin、Skills CLI 与 GitHub skill 的精确版本
-- [x] 面向用户已安装 Skill 库的 `freshkeeper-check` 与 `freshkeeper-update` Agent Skills——带备份和非破坏边界
-- [ ] Cursor / Windsurf / Aider / Gemini CLI 适配器（v1.1）
+- [x] 面向用户已安装 Skill 库的 `freshkeeper-check` 与 `freshkeeper-update` Agent Skills——支持来源恢复、历史匹配、三方更新、备份和非破坏边界
+- [ ] Cursor / Windsurf / Aider / Gemini CLI 适配器
 - [ ] 更新完自动发 macOS 原生通知
 - [ ] Windows 支持（走 Task Scheduler）
 - [ ] GitHub Actions OIDC + Trusted Publisher 自动发版
