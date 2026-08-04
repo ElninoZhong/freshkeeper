@@ -27,6 +27,16 @@ npx freshkeeper@latest init
 
 它会先自动检查你电脑上已经装了哪些受支持的工具，然后帮你跑第一次更新。跑完之后，还会问你要不要顺手配一个每周自动执行的计划，后面基本就不用自己记了。
 
+## Agent Skill
+
+可以直接从本仓库安装 Freshkeeper Skill：
+
+```bash
+npx skills add ElninoZhong/freshkeeper --skill freshkeeper -g -y
+```
+
+支持的平台可以用 `$freshkeeper` 显式调用，也可以直接说“锁定这个项目的 AI 工具版本，不要升级”或“按最近一层 Freshkeeper lock 恢复”。Skill 只把自然语言意图映射到现有 CLI，继续遵守同一套精确校验与 fail-closed 安全边界，不会复制一套新的更新逻辑。
+
 ## 命令
 | 命令 | 作用 |
 |---|---|
@@ -104,6 +114,7 @@ A：已经在 v1.1 的路线图里。
 正在推进，欢迎在 issue 里一起讨论。
 
 - [x] [#1 项目级 lockfile 支持](https://github.com/ElninoZhong/freshkeeper/issues/1)——按项目锁定、恢复并遵守 Claude Code、plugin、Skills CLI 与 GitHub skill 的精确版本
+- [x] 可安装的 `freshkeeper` Agent Skill——用自然语言完成检查、锁定、恢复、更新与计划任务管理
 - [ ] Cursor / Windsurf / Aider / Gemini CLI 适配器（v1.1）
 - [ ] 更新完自动发 macOS 原生通知
 - [ ] Windows 支持（走 Task Scheduler）

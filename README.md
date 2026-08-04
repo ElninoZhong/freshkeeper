@@ -22,6 +22,16 @@ npx freshkeeper@latest init
 
 Freshkeeper detects which supported agents are already installed on your machine, runs the first update for what it finds, and then offers to set up a weekly schedule so you do not have to remember it later.
 
+## Agent Skill
+
+Install the Freshkeeper Skill from this repository:
+
+```bash
+npx skills add ElninoZhong/freshkeeper --skill freshkeeper -g -y
+```
+
+Invoke it explicitly with `$freshkeeper` where supported, or use natural language such as “lock this project's AI toolchain without updating” and “restore the nearest Freshkeeper lock.” The Skill maps intent to the existing CLI and preserves the same lock verification and fail-closed safety boundaries; it does not duplicate updater logic.
+
 ## Commands
 | Command | What it does |
 |---|---|
@@ -99,6 +109,7 @@ A: On the roadmap for v1.1.
 Actively planned, open to co-design — drop thoughts in the linked issues.
 
 - [x] [#1 Per-project lockfile support](https://github.com/ElninoZhong/freshkeeper/issues/1) — lock, restore, and respect exact Claude Code, plugin, Skills CLI, and GitHub skill revisions per project
+- [x] Installable `freshkeeper` Agent Skill for natural-language inspection, locking, restoration, updating, and scheduling
 - [ ] Cursor / Windsurf / Aider / Gemini CLI adapters (v1.1)
 - [ ] macOS native notifications on update complete
 - [ ] Windows support via Task Scheduler
