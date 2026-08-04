@@ -1,67 +1,73 @@
 ---
 name: freshkeeper-update
-description: Actually update all installed, enabled AI coding tools through Freshkeeper and report successes, skips, failures, and changelogs. Use when the user says `freshkeeper update`, invokes `$freshkeeper-update`, or explicitly asks Freshkeeper to upgrade Claude Code, Codex, OpenClaw, Hermes, plugins, or skills. This is a mutating operation; do not trigger it for check-only or details-only requests.
+description: Safely update all updateable Skills installed in the user's shared/global Skill library while backing up the library, preserving local and untracked Skills, and reporting coverage gaps. Use when the user invokes `$freshkeeper-update`, says `freshkeeper update`, or explicitly asks to update all installed Skills. This Skill updates Skills, not Freshkeeper itself or AI coding tool binaries, plugins, or agents.
 ---
 
 # Freshkeeper Update
 
-Run Freshkeeper's real update operation. This Skill is intentionally separate from `freshkeeper-check`: an update request authorizes updates, while a check request never does.
+Update installed Skills in the shared/global Skill library. Do not update Claude Code, Codex, OpenClaw, Hermes, Freshkeeper itself, plugins, crontab, or project toolchain locks.
 
-## Confirm the requested operation
+## Confirm the scope
 
-- `$freshkeeper-update`, `freshkeeper update`, “用 Freshkeeper 更新”, and equivalent direct requests authorize one `freshkeeper update` run.
-- Do not pre-run `freshkeeper check` merely because it is available.
-- Do not use this Skill for `freshkeeper check` or `freshkeeper check with details`.
-- Do not widen the request into `init`, `lock`, `restore`, `update --respect-lock`, or a schedule change.
+An explicit `$freshkeeper-update`, `freshkeeper update`, or request to update all installed Skills authorizes updates to source-tracked shared Skills. It does not authorize deleting obsolete Skills, inventing sources for untracked Skills, or installing newly discovered Skills.
 
-## Resolve the runner
+Use the global/shared library reported by Skills CLI. On this Mac it is `/Users/elninozhong/.agents/skills`; Claude sees the same library through `/Users/elninozhong/.claude/skills`.
 
-1. Work from the directory the user placed in scope. This matters because the skills adapter discovers the nearest project `skills-lock.json` from that directory.
-2. Use `freshkeeper` when installed, after checking `freshkeeper --version`.
-3. When it is absent and the user explicitly invoked this Skill or asked to use Freshkeeper, use `npx --yes freshkeeper@latest` temporarily. Do not install it globally.
-4. If the configured npm mirror has not synchronized a known published version, retry only the Freshkeeper package through `https://registry.npmjs.org/`; preserve the user's normal registry configuration.
-5. Use the same resolved runner for the whole operation.
+## Resolve Skills CLI
 
-## Inspect the mutation boundary
+Prefer an installed `skills` command. Otherwise use `npx --yes skills@latest` temporarily. Do not globally install the CLI.
+
+Use the global scope explicitly in every command. Never rely on current-directory auto-detection.
+
+## Inventory and back up first
 
 Before updating:
 
-1. Read `~/.freshkeeper/config.json` when it exists.
-2. Name the enabled adapters that the run may affect. Disabled adapters stay untouched.
-3. If `skills-cli` is enabled, inspect the nearest `skills-lock.json` when present. A missing lock means the adapter safely skips project skill writes; a malformed lock is an error, not permission for a global refresh.
-4. Never set `FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE=1` unless the user separately and explicitly requests a broad global skills refresh and accepts the wider scope.
+1. Run `skills list -g --json` and save the complete pre-update inventory.
+2. Read `~/.agents/.skill-lock.json` and classify installed Skills as GitHub-tracked, well-known, local, or untracked.
+3. Create a timestamped recovery copy under `~/.agents/skill-backups/` containing the shared Skill directories and `.skill-lock.json`.
+4. Verify `/Users/elninozhong/.claude/skills` still resolves to the shared root when working on this Mac.
 
-## Run the update
+Stop before mutation if the inventory or backup cannot be verified.
 
-Run exactly:
+## Update tracked Skills
+
+Run:
 
 ```text
-freshkeeper update
+skills update -g -y
 ```
 
-Do not reimplement adapters or fall back to raw third-party update commands after a failure. Keep all update authority in Freshkeeper.
+This checks and updates Skills with sufficient source and folder-hash metadata. Non-interactive mode must remain enabled so an upstream deletion is reported and skipped rather than removing the local copy.
 
-## Verify and report
+For a `well-known` source that Skills CLI reports as uncheckable, derive the source base URL by removing `/.well-known/...` from its recorded `sourceUrl`. Refresh only the exact Skill names already present in the pre-update inventory, grouped by that base URL:
 
-Report:
+```text
+skills add <recorded-base-url> --skill <installed-skill-names...> -g -y
+```
 
-1. The command and working directory used.
-2. Enabled adapters inspected by the run.
-3. Successful updates.
-4. Safe skips, especially skills skipped because no valid project lock authorized them.
-5. Failed adapters and their reported errors.
-6. Changelog links or summaries emitted by Freshkeeper.
+Do not use `--all`. Do not add upstream Skills that were not installed before the run.
 
-Do not infer complete success from a zero exit code when Freshkeeper reports a failed adapter. Do not claim that a skipped adapter was updated.
+Skip local and untracked Skills. Do not guess where they came from.
+
+## Verify after updating
+
+1. Run `skills list -g --json` again.
+2. Compare names and paths with the pre-update inventory.
+3. Treat any missing pre-existing Skill as a failure. Restore only the missing Skill from the recovery copy and report it.
+4. Verify the Claude-visible shared path still resolves.
+5. Report updated, already-current, refreshed-without-version-proof, skipped, restored, and failed Skills separately.
+
+Do not claim that every installed Skill was updated when source metadata made some Skills uncheckable.
 
 ## Safety boundary
 
-- Never run a real update during tests; use mocks and isolated temporary directories.
-- Never delete, prune, reconcile, or broadly rewrite unrelated global plugins or `~/.agents/skills`.
-- Never change crontab, project locks, or Freshkeeper configuration as a side effect.
+- Never delete, prune, or broadly reconcile the shared library.
+- Never overwrite a local or untracked Skill with a guessed remote source.
+- Never update agent binaries, plugins, schedules, or project locks.
+- Never remove the recovery copy during the same run.
 
 ## Invocation examples
 
 - `$freshkeeper-update`
-- `freshkeeper update`
-- `用 Freshkeeper 更新所有已启用的 AI coding 工具`
+- `freshkeeper update，把我装的所有可更新 Skill 更新掉`
