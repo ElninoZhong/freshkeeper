@@ -29,6 +29,9 @@ Freshkeeper detects which supported agents are already installed on your machine
 | `freshkeeper list` | Show which supported agents are installed + their versions |
 | `freshkeeper check` | Show pending updates (dry-run where supported) |
 | `freshkeeper update` | Update everything installed, then print changelog for updated tools |
+| `freshkeeper lock` | Snapshot exact project versions into `freshkeeper.lock.json` |
+| `freshkeeper restore` | Restore and verify the nearest project lock |
+| `freshkeeper update --respect-lock` | Enforce the nearest lock instead of moving past pinned versions |
 | `freshkeeper schedule <cron>` | Install a crontab entry; `schedule off` to remove |
 
 ## Supported Agents
@@ -53,6 +56,16 @@ Location: `~/.freshkeeper/config.json`
 ```
 
 `enabledAdapters` is authoritative: adapters omitted from this array are not detected or updated. Unknown adapter IDs fail visibly instead of being ignored.
+
+## Project locks
+
+Run `freshkeeper lock` from a project root to create a reviewable `freshkeeper.lock.json`. The first lock schema covers exact Claude Code versions, the installed Claude plugin inventory, the exact Skills CLI version, and GitHub skills pinned to both a 40-character commit and a SHA-256 content hash.
+
+`freshkeeper restore` searches upward for the nearest lock. `freshkeeper update --respect-lock` uses the same restore path, so an explicitly lock-respecting update cannot silently move a project past its declared versions. Adapters disabled in `enabledAdapters` remain untouched. Normal global `freshkeeper update` remains unchanged.
+
+Skills are installed into a temporary project first, checked against the declared commit and content hash, backed up, applied, and verified again. A partial failure restores the previous project skill copies and `skills-lock.json`.
+
+Claude Code supports exact-version installs. Claude plugins do not expose a general downgrade command: Freshkeeper installs or upgrades when the locked version is available, verifies the final version and enabled state, and fails loudly rather than claiming success when a downgrade or unavailable marketplace revision would be required. Extra global plugins are not pruned.
 
 ### Skills safety
 
@@ -85,7 +98,7 @@ A: On the roadmap for v1.1.
 ## Roadmap
 Actively planned, open to co-design — drop thoughts in the linked issues.
 
-- [ ] [#1 Per-project lockfile support](https://github.com/ElninoZhong/freshkeeper/issues/1) — pin CLI + plugin + skill versions per project so version drift stops surfacing as mystery model failures
+- [x] [#1 Per-project lockfile support](https://github.com/ElninoZhong/freshkeeper/issues/1) — lock, restore, and respect exact Claude Code, plugin, Skills CLI, and GitHub skill revisions per project
 - [ ] Cursor / Windsurf / Aider / Gemini CLI adapters (v1.1)
 - [ ] macOS native notifications on update complete
 - [ ] Windows support via Task Scheduler

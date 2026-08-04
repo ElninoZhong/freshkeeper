@@ -25,4 +25,20 @@ describe('claude-code adapter', () => {
     expect(r.failed).toHaveLength(0);
     expect(r.logs).toContain('up to date');
   });
+
+  it('captures and restores an exact Claude Code version', async () => {
+    const spy = vi.spyOn(exec, 'safeExec')
+      .mockResolvedValueOnce({ ok: true, stdout: '2.1.115 (Claude Code)', stderr: '' })
+      .mockResolvedValueOnce({ ok: true, stdout: 'installed 2.1.116', stderr: '' })
+      .mockResolvedValueOnce({ ok: true, stdout: '2.1.116 (Claude Code)', stderr: '' });
+
+    const result = await claudeCodeAdapter.restoreLock?.(
+      { adapter: 'claude-code', version: '2.1.116' },
+      { projectDir: process.cwd() }
+    );
+
+    expect(spy).toHaveBeenNthCalledWith(2, 'claude', ['install', '2.1.116', '--force']);
+    expect(result?.updated).toEqual(['claude-code@2.1.116']);
+    expect(result?.failed).toEqual([]);
+  });
 });
