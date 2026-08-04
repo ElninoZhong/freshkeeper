@@ -24,13 +24,14 @@ Freshkeeper detects which supported agents are already installed on your machine
 
 ## Agent Skill
 
-Install the Freshkeeper Skill from this repository:
+Install the two focused Freshkeeper Skills from this repository:
 
 ```bash
-npx skills add ElninoZhong/freshkeeper --skill freshkeeper -g -y
+npx skills add ElninoZhong/freshkeeper --skill freshkeeper-check -g -y
+npx skills add ElninoZhong/freshkeeper --skill freshkeeper-update -g -y
 ```
 
-Invoke it explicitly with `$freshkeeper` where supported, or use natural language such as “lock this project's AI toolchain without updating” and “restore the nearest Freshkeeper lock.” The Skill maps intent to the existing CLI and preserves the same lock verification and fail-closed safety boundaries; it does not duplicate updater logic.
+Use `$freshkeeper-check` for a concise read-only update check, `$freshkeeper-check with details` for installed versions plus pending-update details, and `$freshkeeper-update` for the real mutating update. The detailed mode runs `freshkeeper list` and `freshkeeper check`; `with details` is not a literal CLI argument. Keeping check and update in separate Skills prevents a read-only request from silently widening into a mutation.
 
 ## Commands
 | Command | What it does |
@@ -109,7 +110,7 @@ A: On the roadmap for v1.1.
 Actively planned, open to co-design — drop thoughts in the linked issues.
 
 - [x] [#1 Per-project lockfile support](https://github.com/ElninoZhong/freshkeeper/issues/1) — lock, restore, and respect exact Claude Code, plugin, Skills CLI, and GitHub skill revisions per project
-- [x] Installable `freshkeeper` Agent Skill for natural-language inspection, locking, restoration, updating, and scheduling
+- [x] Separate installable `freshkeeper-check` and `freshkeeper-update` Agent Skills with an explicit read-only boundary
 - [ ] Cursor / Windsurf / Aider / Gemini CLI adapters (v1.1)
 - [ ] macOS native notifications on update complete
 - [ ] Windows support via Task Scheduler

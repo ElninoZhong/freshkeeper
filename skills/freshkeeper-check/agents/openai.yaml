@@ -1,0 +1,4 @@
+interface:
+  display_name: "Freshkeeper Check"
+  short_description: "Check AI tool updates without changing anything"
+  default_prompt: "Use $freshkeeper-check to check for AI tool updates without installing them."

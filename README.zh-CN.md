@@ -29,13 +29,14 @@ npx freshkeeper@latest init
 
 ## Agent Skill
 
-可以直接从本仓库安装 Freshkeeper Skill：
+可以直接从本仓库安装两条职责独立的 Freshkeeper Skill：
 
 ```bash
-npx skills add ElninoZhong/freshkeeper --skill freshkeeper -g -y
+npx skills add ElninoZhong/freshkeeper --skill freshkeeper-check -g -y
+npx skills add ElninoZhong/freshkeeper --skill freshkeeper-update -g -y
 ```
 
-支持的平台可以用 `$freshkeeper` 显式调用，也可以直接说“锁定这个项目的 AI 工具版本，不要升级”或“按最近一层 Freshkeeper lock 恢复”。Skill 只把自然语言意图映射到现有 CLI，继续遵守同一套精确校验与 fail-closed 安全边界，不会复制一套新的更新逻辑。
+用 `$freshkeeper-check` 做简洁的只读检查，用 `$freshkeeper-check with details` 查看已安装版本和可更新明细，用 `$freshkeeper-update` 执行真实更新。详细模式实际运行 `freshkeeper list` 和 `freshkeeper check`；`with details` 不是传给 CLI 的字面参数。把检查和更新拆开后，只读请求不会被悄悄扩大成修改操作。
 
 ## 命令
 | 命令 | 作用 |
@@ -114,7 +115,7 @@ A：已经在 v1.1 的路线图里。
 正在推进，欢迎在 issue 里一起讨论。
 
 - [x] [#1 项目级 lockfile 支持](https://github.com/ElninoZhong/freshkeeper/issues/1)——按项目锁定、恢复并遵守 Claude Code、plugin、Skills CLI 与 GitHub skill 的精确版本
-- [x] 可安装的 `freshkeeper` Agent Skill——用自然语言完成检查、锁定、恢复、更新与计划任务管理
+- [x] 独立可安装的 `freshkeeper-check` 与 `freshkeeper-update` Agent Skills——明确隔离只读检查和真实更新
 - [ ] Cursor / Windsurf / Aider / Gemini CLI 适配器（v1.1）
 - [ ] 更新完自动发 macOS 原生通知
 - [ ] Windows 支持（走 Task Scheduler）

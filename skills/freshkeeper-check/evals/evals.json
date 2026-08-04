@@ -1,0 +1,28 @@
+{
+  "skill_name": "freshkeeper-check",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "$freshkeeper-check 看看这台电脑上的 AI coding 工具有没有更新。只给我结论，不要安装。",
+      "expected_output": "Run only freshkeeper check and return a concise read-only summary without running list, update, init, restore, lock, or schedule.",
+      "files": [],
+      "expectations": [
+        "Uses freshkeeper check as the operation",
+        "Does not run any mutating Freshkeeper command",
+        "Keeps the result concise"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "$freshkeeper-check with details，逐项告诉我装了什么、当前版本、可更新版本和哪些项目无法 dry-run。",
+      "expected_output": "Run freshkeeper list followed by freshkeeper check, then report each adapter's installed status, detected version, pending update, and check limitation without changing the machine.",
+      "files": [],
+      "expectations": [
+        "Treats with details as an output mode rather than a literal CLI argument",
+        "Uses freshkeeper list and freshkeeper check in that order",
+        "Does not invent latest versions for unsupported or skipped adapters",
+        "Does not run freshkeeper update"
+      ]
+    }
+  ]
+}
