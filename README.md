@@ -31,7 +31,7 @@ npx skills add ElninoZhong/freshkeeper --skill freshkeeper-check -g -y
 npx skills add ElninoZhong/freshkeeper --skill freshkeeper-update -g -y
 ```
 
-These Agent Skills manage the user's installed Skill library, not the Freshkeeper CLI or AI coding tool binaries. Use `$freshkeeper-check` for a read-only inventory and upstream comparison, `$freshkeeper-check with details` for a per-Skill source/status report, and `$freshkeeper-update` to back up the shared library and update every source-tracked installed Skill. Local and untracked Skills are preserved and reported rather than matched to guessed repositories.
+These Agent Skills manage the user's installed Skill libraries, not the Freshkeeper CLI or AI coding tool binaries. They prefer the shared Universal library and fall back to Claude Code, Codex, OpenClaw, and Hermes user-level libraries when no shared library exists. In v1.2, `$freshkeeper-check` can recover missing GitHub provenance from verified evidence, compare whole Skill directories, and search upstream history to distinguish clean old versions from local customizations. `$freshkeeper-update` backs up every selected library and automatically applies only proven clean-old or current-subset updates through a three-way safety check. Local extensions, manual merges, locally ahead Skills, and upstream-deleted legacy Skills are preserved and reported.
 
 ## Commands
 | Command | What it does |
@@ -110,8 +110,8 @@ A: On the roadmap for v1.1.
 Actively planned, open to co-design — drop thoughts in the linked issues.
 
 - [x] [#1 Per-project lockfile support](https://github.com/ElninoZhong/freshkeeper/issues/1) — lock, restore, and respect exact Claude Code, plugin, Skills CLI, and GitHub skill revisions per project
-- [x] Separate `freshkeeper-check` and `freshkeeper-update` Agent Skills for the user's installed Skill library, with backup and non-destructive boundaries
-- [ ] Cursor / Windsurf / Aider / Gemini CLI adapters (v1.1)
+- [x] Separate `freshkeeper-check` and `freshkeeper-update` Agent Skills for the user's installed Skill library, with provenance recovery, history matching, three-way updates, backup, and non-destructive boundaries
+- [ ] Cursor / Windsurf / Aider / Gemini CLI adapters
 - [ ] macOS native notifications on update complete
 - [ ] Windows support via Task Scheduler
 - [ ] Trusted Publisher auto-release via GitHub Actions OIDC

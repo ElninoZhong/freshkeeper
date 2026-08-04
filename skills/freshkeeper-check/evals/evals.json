@@ -3,11 +3,11 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "$freshkeeper-check，检查我共享库里装的所有 Skill 有没有更新，只给结论，不要修改。",
-      "expected_output": "Run the bundled read-only installed-Skill checker against the global shared library and summarize updates, coverage gaps, and errors without invoking any update command.",
+      "prompt": "$freshkeeper-check，检查我装的所有 Skill 有没有更新，只给结论，不要修改。",
+      "expected_output": "Run the bundled read-only installed-Skill checker against the shared library when present, otherwise use supported agent-local libraries, and summarize updates, coverage gaps, and errors without invoking any update command.",
       "files": [],
       "expectations": [
-        "Targets installed Skills in the shared/global Skill library",
+        "Prefers the shared/global Skill library when it exists",
         "Does not check Freshkeeper or AI coding tool binaries",
         "Does not run skills update, skills add, or another mutating command",
         "Separates confirmed updates from uncheckable Skills"
@@ -23,6 +23,32 @@
         "Includes every installed top-level Skill in the detailed report",
         "Does not invent upstream sources for untracked Skills",
         "Remains read-only"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "freshkeeper check with details。我的电脑没有共享 Skill 库，Claude、Codex 和 OpenClaw 各自装了一些，全部检查。",
+      "expected_output": "Fall back to the supported tools' existing user-level Skill libraries, deduplicate symlink aliases by real path, retain tool ownership in the detailed report, and check only source-tracked Skills.",
+      "files": [],
+      "expectations": [
+        "Does not fail merely because ~/.agents/skills is absent",
+        "Discovers supported agent-local Skill libraries",
+        "Deduplicates physical Skills reached through symlinks",
+        "Preserves each Skill's visible-tool ownership",
+        "Does not create or migrate a shared library"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "$freshkeeper-check with details。很多 Skill 没有 lock，别直接说不可核对；恢复来源，判断哪些是旧版、哪些被我改过。",
+      "expected_output": "Use the verified provenance catalog and strong local evidence, compare whole Skill trees, search upstream history for divergent entries, and report exact-current, clean-old, current-subset, local-extension, manual-merge, local-ahead, legacy-local, unresolved, and blocked states without changing the library or lock.",
+      "files": [],
+      "expectations": [
+        "Does not treat a same-name search result as proof",
+        "Compares the whole normalized Skill directory instead of only SKILL.md",
+        "Uses upstream history to prove clean-old or legacy-local states",
+        "Separates safe updates from manual merges and local extensions",
+        "Does not write recovered provenance into the global lock"
       ]
     }
   ]

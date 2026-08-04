@@ -1,70 +1,117 @@
 ---
 name: freshkeeper-update
-description: Safely update all updateable Skills installed in the user's shared/global Skill library while backing up the library, preserving local and untracked Skills, and reporting coverage gaps. Use when the user invokes `$freshkeeper-update`, says `freshkeeper update`, or explicitly asks to update all installed Skills. This Skill updates Skills, not Freshkeeper itself or AI coding tool binaries, plugins, or agents.
+description: Safely update installed Skills from both recorded and evidence-recovered sources. Back up selected libraries, compare whole directories, prove clean historical bases, add missing upstream resources, preserve local extensions, require manual merges for diverged content, and retain locally ahead or upstream-deleted Skills. Use when the user invokes `$freshkeeper-update`, says `freshkeeper update`, or explicitly asks to update all installed Skills. Prefer the shared library and fall back to supported AI tools' user-level libraries; never update Freshkeeper itself, AI tool binaries, plugins, or agents.
 ---
 
 # Freshkeeper Update
 
-Update installed Skills in the shared/global Skill library. Do not update Claude Code, Codex, OpenClaw, Hermes, Freshkeeper itself, plugins, crontab, or project toolchain locks.
+Update installed Skills without changing Claude Code, Codex, OpenClaw, Hermes, Freshkeeper itself, plugins, schedules, or project toolchain locks.
 
 ## Confirm the scope
 
-An explicit `$freshkeeper-update`, `freshkeeper update`, or request to update all installed Skills authorizes updates to source-tracked shared Skills. It does not authorize deleting obsolete Skills, inventing sources for untracked Skills, or installing newly discovered Skills.
+An explicit `$freshkeeper-update`, `freshkeeper update`, or request to update all installed Skills authorizes recorded updates plus evidence-recovered `clean-old` and `current-subset` updates. It does not authorize guessing sources, overwriting `manual-merge` Skills, deleting `legacy-local` Skills, installing newly discovered Skills, or migrating agent-local libraries into a shared library.
 
-Use the global/shared library reported by Skills CLI. On this Mac it is `/Users/elninozhong/.agents/skills`; Claude sees the same library through `/Users/elninozhong/.claude/skills`.
+Use this order:
+
+1. If `~/.agents/skills` exists, update that canonical shared library.
+2. Otherwise, fall back to the existing user-level Skill libraries for Claude Code, Codex, OpenClaw, and Hermes. Respect `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and `HERMES_HOME`; recognize OpenClaw's legacy homes.
+3. Resolve real paths. Update one physical Skill once when multiple tools reach it through symlinks, and leave those symlinks intact.
+4. Treat distinct copied installations independently and update them in their original tool libraries.
 
 ## Resolve Skills CLI
 
 Prefer an installed `skills` command. Otherwise use `npx --yes skills@latest` temporarily. Do not globally install the CLI.
 
-Use the global scope explicitly in every command. Never rely on current-directory auto-detection.
-
 ## Inventory and back up first
 
-Before updating:
+Resolve this Skill's directory. Choose a temporary plan path and run the bundled planner read-only first:
 
-1. Run `skills list -g --json` and save the complete pre-update inventory.
-2. Read `~/.agents/.skill-lock.json` and classify installed Skills as GitHub-tracked, well-known, local, or untracked.
-3. Create a timestamped recovery copy under `~/.agents/skill-backups/` containing the shared Skill directories and `.skill-lock.json`.
-4. Verify `/Users/elninozhong/.claude/skills` still resolves to the shared root when working on this Mac.
+```text
+node <skill-directory>/scripts/prepare-skill-update.mjs --write-plan <temporary-plan.json> --json
+```
 
-Stop before mutation if the inventory or backup cannot be verified.
+Stop if it reports `libraryMode: none`, an unreadable library, or malformed lock metadata. Then create and verify the recovery copy:
 
-## Update tracked Skills
+```text
+node <skill-directory>/scripts/prepare-skill-update.mjs --backup --write-plan <temporary-plan.json> --json
+```
 
-Run:
+The plan includes recorded sources, recovered evidence, whole-directory snapshot hashes, current upstream tree hashes, and historical base commits. The backup contains every selected physical library, the global lock when present, and a manifest under `~/.agents/skill-backups/`. Do not mutate anything unless the returned backup paths exist and the manifest matches the pre-update inventory.
+
+Historical matching checks up to 200 relevant commits by default. Use `--no-history` only for a quick preview that cannot prove older clean versions, or `--history-limit <0-200>` to set an explicit depth.
+
+## Update a shared library
+
+When the planner reports `libraryMode: shared`, run:
 
 ```text
 skills update -g -y
 ```
 
-This checks and updates Skills with sufficient source and folder-hash metadata. Non-interactive mode must remain enabled so an upstream deletion is reported and skipped rather than removing the local copy.
+This updates global source-tracked Skills. Non-interactive mode must remain enabled so an upstream deletion is reported and skipped rather than removing the local copy.
 
-For a `well-known` source that Skills CLI reports as uncheckable, derive the source base URL by removing `/.well-known/...` from its recorded `sourceUrl`. Refresh only the exact Skill names already present in the pre-update inventory, grouped by that base URL:
+For a `well-known` entry that cannot be version-compared, remove `/.well-known/...` from its recorded `sourceUrl` and refresh only the exact Skill names already present:
 
 ```text
 skills add <recorded-base-url> --skill <installed-skill-names...> -g -y
 ```
 
-Do not use `--all`. Do not add upstream Skills that were not installed before the run.
+Do not use `--all` or install names absent from the pre-update inventory.
 
-Skip local and untracked Skills. Do not guess where they came from.
+## Update agent-local fallback libraries
+
+When the planner reports `libraryMode: agent-local`, do not run `skills update -g`: that can create `~/.agents/skills` and silently migrate the installation model.
+
+For every planner item marked `updateable` or `refreshable`, use its exact `installSource`, `name`, and `writeAgents`:
+
+```text
+skills add <installSource> --skill <name> -g --copy --agent <writeAgents...> -y
+```
+
+Add `--full-depth` only when the planner sets `fullDepth: true`. `writeAgents` contains one owning directory for each physical installation, so symlink aliases remain intact. Run items separately when copied installations with the same name have different physical paths.
+
+Skip `local-only`, `untracked`, and `uncheckable` items. Never guess their sources. If an item has only symlink aliases and no safe owning directory, report it instead of replacing a symlink.
+
+## Apply recovered-source updates
+
+Only planner items marked `recoverable-update` may cross this seam. First preview the file actions:
+
+```text
+node <skill-directory>/scripts/apply-provenance-updates.mjs --plan <temporary-plan.json> --json
+```
+
+Then apply them:
+
+```text
+node <skill-directory>/scripts/apply-provenance-updates.mjs --plan <temporary-plan.json> --apply --json
+```
+
+The executor:
+
+1. Revalidates the backup, installed snapshot, upstream tree, and historical base.
+2. For `current-subset`, adds only missing upstream files.
+3. For `clean-old`, performs a three-way update: replace files still equal to the historical base, remove only files proven to have been upstream-managed and deleted upstream, and preserve unrelated local files.
+4. Stops on any local conflict and restores the affected Skill from the verified backup after a partial failure.
+
+Do not pass `manual-merge`, `local-ahead`, `legacy-local`, `local-extension`, `unresolved`, or `check-blocked` items to the executor. Report them separately.
 
 ## Verify after updating
 
-1. Run `skills list -g --json` again.
-2. Compare names and paths with the pre-update inventory.
-3. Treat any missing pre-existing Skill as a failure. Restore only the missing Skill from the recovery copy and report it.
-4. Verify the Claude-visible shared path still resolves.
-5. Report updated, already-current, refreshed-without-version-proof, skipped, restored, and failed Skills separately.
+1. Run the planner again without `--backup`.
+2. Compare every pre-update Skill name, physical path, and visible-tool set with the backup manifest.
+3. Treat any missing pre-existing Skill or broken symlink as failure. Restore only the affected physical Skill from the recovery copy and report it.
+4. In shared mode, verify each pre-existing tool alias still resolves to the shared physical Skill.
+5. In fallback mode, verify `~/.agents/skills` was not created.
+6. Report recorded updates, recovered safe updates, already-current, local extensions, manual merges, local-ahead, legacy-local, unresolved, restored, and failed Skills separately.
 
-Do not claim that every installed Skill was updated when source metadata made some Skills uncheckable.
+Do not claim every installed Skill was updated when source metadata made some Skills uncheckable.
 
 ## Safety boundary
 
-- Never delete, prune, or broadly reconcile the shared library.
+- Never delete, prune, broadly reconcile, or silently migrate a Skill library.
 - Never overwrite a local or untracked Skill with a guessed remote source.
-- Never update agent binaries, plugins, schedules, or project locks.
+- Never treat a name match as provenance or write recovered candidates into the global lock automatically.
+- Never update AI tool binaries, plugins, schedules, or project locks.
 - Never remove the recovery copy during the same run.
 
 ## Invocation examples

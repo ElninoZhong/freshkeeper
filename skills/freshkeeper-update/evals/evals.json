@@ -3,13 +3,13 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "$freshkeeper-update，把共享库里所有能追踪来源的 Skill 更新掉，本地自建的不要碰。",
-      "expected_output": "Inventory and back up the shared library, run the global Skills CLI update, refresh only previously installed well-known Skills, verify the post-update inventory, and skip local or untracked Skills.",
+      "prompt": "$freshkeeper-update，把我装的所有能追踪来源的 Skill 更新掉，本地自建的不要碰。",
+      "expected_output": "Discover and back up the selected Skill libraries, update the shared library when present or the original agent-local libraries when it is absent, verify the post-update inventory, and skip local or untracked Skills.",
       "files": [],
       "expectations": [
-        "Targets the shared/global installed Skill library",
+        "Prefers the shared/global installed Skill library when present",
         "Creates and verifies a recovery copy before mutation",
-        "Runs skills update with explicit global non-interactive scope",
+        "Uses explicit global non-interactive update only in shared-library mode",
         "Preserves local and untracked Skills",
         "Does not update AI coding tool binaries or plugins"
       ]
@@ -24,6 +24,32 @@
         "Does not use --all or add newly discovered Skills",
         "Compares the full inventory before and after",
         "Restores and reports any pre-existing Skill that disappears"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "freshkeeper update。没有共享库，Skill 分别装在 Claude、Codex 和 Hermes 自己的目录里；原地更新，不要替我迁到共享库。",
+      "expected_output": "Use the bundled planner and verified backup, then refresh each source-tracked physical installation in its owning agent-local directory with exact names and --copy, preserving symlink aliases and proving that no shared library was created.",
+      "files": [],
+      "expectations": [
+        "Falls back to supported agent-local Skill libraries",
+        "Does not run broad global update in fallback mode",
+        "Updates exact pre-existing names in their original tool libraries",
+        "Preserves symlink aliases and separate copied installations",
+        "Verifies ~/.agents/skills was not created"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "freshkeeper update。没有 lock 的也尽量恢复来源；能证明是干净旧版的自动更新，我自己改过的不要覆盖。",
+      "expected_output": "Create a verified backup and provenance plan, preview recovered-source file actions, automatically apply only clean-old and current-subset items through the transactional three-way executor, preserve local extensions and legacy Skills, and report manual-merge, local-ahead, unresolved, restored, and failed states separately.",
+      "files": [],
+      "expectations": [
+        "Requires strong provenance evidence and current upstream validation",
+        "Revalidates the installed snapshot and upstream tree before mutation",
+        "Uses a historical base to update clean-old Skills",
+        "Stops and rolls back an affected Skill after a partial failure",
+        "Does not auto-update manual-merge, local-ahead, legacy-local, or unresolved items"
       ]
     }
   ]
