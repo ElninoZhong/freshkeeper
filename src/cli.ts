@@ -9,6 +9,8 @@ import { printCheck } from './commands/check.js';
 import { printUpdate } from './commands/update.js';
 import { runSchedule } from './commands/schedule.js';
 import { runInit } from './commands/init.js';
+import { printLock } from './commands/lock.js';
+import { printRestore } from './commands/restore.js';
 
 function configuredRegistry() {
   return buildRegistry(loadConfig().enabledAdapters);
@@ -40,9 +42,27 @@ export async function run(): Promise<void> {
   program
     .command('update')
     .description('Update all installed agents (CLI + plugins + skills)')
+    .option('--respect-lock', 'Restore and verify versions from the nearest freshkeeper.lock.json')
+    .action(async (options: { respectLock?: boolean }) => {
+      const r = configuredRegistry();
+      if (options.respectLock) await printRestore(r);
+      else await printUpdate(r);
+    });
+
+  program
+    .command('lock')
+    .description('Snapshot exact project tool versions into freshkeeper.lock.json')
     .action(async () => {
       const r = configuredRegistry();
-      await printUpdate(r);
+      await printLock(r);
+    });
+
+  program
+    .command('restore')
+    .description('Restore and verify versions from the nearest freshkeeper.lock.json')
+    .action(async () => {
+      const r = configuredRegistry();
+      await printRestore(r);
     });
 
   program

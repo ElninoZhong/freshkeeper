@@ -1,9 +1,9 @@
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import * as exec from '../../src/util/exec.js';
-import { skillsCliAdapter } from '../../src/adapters/skills-cli.js';
+import { computeSkillFolderHash, skillsCliAdapter } from '../../src/adapters/skills-cli.js';
 import { Registry } from '../../src/adapters/registry.js';
 import { runUpdate } from '../../src/commands/update.js';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -209,5 +209,197 @@ describe('skills-cli adapter', () => {
     expect(r.updated).toContain('2 skills');
     expect(r.failed).toHaveLength(0);
     expect(r.logs).toContain('Refreshing 2 project skill');
+  });
+
+  it('captures GitHub skills at an exact commit after content verification', async () => {
+    const projectDir = mkdtempSync(join(tmpdir(), 'freshkeeper-project-lock-'));
+    const skillDir = join(projectDir, '.agents', 'skills', 'demo-skill');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, 'SKILL.md'), '# locked content\n');
+    const computedHash = computeSkillFolderHash(skillDir);
+    writeFileSync(join(projectDir, 'skills-lock.json'), JSON.stringify({
+      version: 1,
+      skills: {
+        'demo-skill': {
+          source: 'owner/demo-skill',
+          sourceType: 'github',
+          skillPath: 'SKILL.md',
+          computedHash
+        }
+      }
+    }));
+    const ref = 'a'.repeat(40);
+
+    vi.spyOn(exec, 'safeExec').mockImplementation(async (cmd, args, opts) => {
+      if (cmd === 'skills' && args.join(' ') === '--version') {
+        return { ok: true, stdout: '1.5.16', stderr: '' };
+      }
+      if (cmd === 'git' && args[0] === 'ls-remote') {
+        return { ok: true, stdout: `${ref}\tHEAD`, stderr: '' };
+      }
+      if (cmd === 'npx' && args.includes('add') && opts?.cwd) {
+        const stagedSkillDir = join(opts.cwd, '.agents', 'skills', 'demo-skill');
+        mkdirSync(stagedSkillDir, { recursive: true });
+        writeFileSync(join(stagedSkillDir, 'SKILL.md'), '# locked content\n');
+        writeFileSync(join(opts.cwd, 'skills-lock.json'), JSON.stringify({
+          version: 1,
+          skills: {
+            'demo-skill': {
+              source: 'owner/demo-skill',
+              sourceType: 'github',
+              ref,
+              skillPath: 'SKILL.md',
+              computedHash
+            }
+          }
+        }));
+        return { ok: true, stdout: 'installed', stderr: '' };
+      }
+      return { ok: false, stdout: '', stderr: '', error: `unexpected ${cmd} ${args.join(' ')}` };
+    });
+
+    const lock = await skillsCliAdapter.captureLock?.({ projectDir });
+
+    expect(lock).toEqual({
+      adapter: 'skills-cli',
+      version: '1.5.16',
+      skills: {
+        'demo-skill': {
+          source: 'owner/demo-skill',
+          ref,
+          skillPath: 'SKILL.md',
+          computedHash
+        }
+      }
+    });
+  });
+
+  it('stages and verifies locked skills before replacing the project copy', async () => {
+    const projectDir = mkdtempSync(join(tmpdir(), 'freshkeeper-project-restore-'));
+    const targetDir = join(projectDir, '.agents', 'skills', 'demo-skill');
+    mkdirSync(targetDir, { recursive: true });
+    writeFileSync(join(targetDir, 'SKILL.md'), '# old content\n');
+    writeFileSync(join(projectDir, 'skills-lock.json'), JSON.stringify({ version: 1, skills: {} }));
+
+    const ref = 'b'.repeat(40);
+    const expectedDir = mkdtempSync(join(tmpdir(), 'freshkeeper-expected-skill-'));
+    writeFileSync(join(expectedDir, 'SKILL.md'), '# restored content\n');
+    const computedHash = computeSkillFolderHash(expectedDir);
+
+    vi.spyOn(exec, 'safeExec').mockImplementation(async (cmd, args, opts) => {
+      if (cmd === 'npx' && args.includes('add') && opts?.cwd) {
+        const stagedSkillDir = join(opts.cwd, '.agents', 'skills', 'demo-skill');
+        mkdirSync(stagedSkillDir, { recursive: true });
+        writeFileSync(join(stagedSkillDir, 'SKILL.md'), '# restored content\n');
+        writeFileSync(join(opts.cwd, 'skills-lock.json'), JSON.stringify({
+          version: 1,
+          skills: {
+            'demo-skill': {
+              source: 'owner/demo-skill',
+              sourceType: 'github',
+              ref,
+              skillPath: 'SKILL.md',
+              computedHash
+            }
+          }
+        }));
+        return { ok: true, stdout: 'installed', stderr: '' };
+      }
+      return { ok: false, stdout: '', stderr: '', error: `unexpected ${cmd} ${args.join(' ')}` };
+    });
+
+    const result = await skillsCliAdapter.restoreLock?.({
+      adapter: 'skills-cli',
+      version: '1.5.16',
+      skills: {
+        'demo-skill': { source: 'owner/demo-skill', ref, skillPath: 'SKILL.md', computedHash }
+      }
+    }, { projectDir });
+
+    expect(result?.failed).toEqual([]);
+    expect(readFileSync(join(targetDir, 'SKILL.md'), 'utf-8')).toBe('# restored content\n');
+    expect(JSON.parse(readFileSync(join(projectDir, 'skills-lock.json'), 'utf-8')).skills['demo-skill'].ref).toBe(ref);
+  });
+
+  it('leaves the project copy untouched when staged content fails hash verification', async () => {
+    const projectDir = mkdtempSync(join(tmpdir(), 'freshkeeper-project-reject-'));
+    const targetDir = join(projectDir, '.agents', 'skills', 'demo-skill');
+    mkdirSync(targetDir, { recursive: true });
+    writeFileSync(join(targetDir, 'SKILL.md'), '# keep me\n');
+    const ref = 'c'.repeat(40);
+
+    vi.spyOn(exec, 'safeExec').mockImplementation(async (cmd, args, opts) => {
+      if (cmd === 'npx' && args.includes('add') && opts?.cwd) {
+        const stagedSkillDir = join(opts.cwd, '.agents', 'skills', 'demo-skill');
+        mkdirSync(stagedSkillDir, { recursive: true });
+        writeFileSync(join(stagedSkillDir, 'SKILL.md'), '# wrong content\n');
+        writeFileSync(join(opts.cwd, 'skills-lock.json'), JSON.stringify({
+          version: 1,
+          skills: {
+            'demo-skill': {
+              source: 'owner/demo-skill', sourceType: 'github', ref, computedHash: 'd'.repeat(64)
+            }
+          }
+        }));
+        return { ok: true, stdout: 'installed', stderr: '' };
+      }
+      return { ok: false, stdout: '', stderr: '', error: 'unexpected command' };
+    });
+
+    const result = await skillsCliAdapter.restoreLock?.({
+      adapter: 'skills-cli',
+      version: '1.5.16',
+      skills: {
+        'demo-skill': { source: 'owner/demo-skill', ref, computedHash: 'd'.repeat(64) }
+      }
+    }, { projectDir });
+
+    expect(result?.failed[0]?.error).toMatch(/hash mismatch/i);
+    expect(readFileSync(join(targetDir, 'SKILL.md'), 'utf-8')).toBe('# keep me\n');
+  });
+
+  it('rolls back the skill and source lock when applying the staged lock fails', async () => {
+    const projectDir = mkdtempSync(join(tmpdir(), 'freshkeeper-project-rollback-'));
+    const targetDir = join(projectDir, '.agents', 'skills', 'demo-skill');
+    mkdirSync(targetDir, { recursive: true });
+    writeFileSync(join(targetDir, 'SKILL.md'), '# original content\n');
+    const originalLock = `${JSON.stringify({ version: 1, skills: { local: { source: 'local', sourceType: 'local' } } }, null, 2)}\n`;
+    writeFileSync(join(projectDir, 'skills-lock.json'), originalLock);
+    mkdirSync(join(projectDir, `skills-lock.json.freshkeeper-${process.pid}.tmp`));
+
+    const ref = 'e'.repeat(40);
+    const expectedDir = mkdtempSync(join(tmpdir(), 'freshkeeper-rollback-expected-'));
+    writeFileSync(join(expectedDir, 'SKILL.md'), '# replacement content\n');
+    const computedHash = computeSkillFolderHash(expectedDir);
+
+    vi.spyOn(exec, 'safeExec').mockImplementation(async (cmd, args, opts) => {
+      if (cmd === 'npx' && args.includes('add') && opts?.cwd) {
+        const stagedSkillDir = join(opts.cwd, '.agents', 'skills', 'demo-skill');
+        mkdirSync(stagedSkillDir, { recursive: true });
+        writeFileSync(join(stagedSkillDir, 'SKILL.md'), '# replacement content\n');
+        writeFileSync(join(opts.cwd, 'skills-lock.json'), JSON.stringify({
+          version: 1,
+          skills: {
+            'demo-skill': {
+              source: 'owner/demo-skill', sourceType: 'github', ref, computedHash
+            }
+          }
+        }));
+        return { ok: true, stdout: 'installed', stderr: '' };
+      }
+      return { ok: false, stdout: '', stderr: '', error: 'unexpected command' };
+    });
+
+    const result = await skillsCliAdapter.restoreLock?.({
+      adapter: 'skills-cli',
+      version: '1.5.16',
+      skills: {
+        'demo-skill': { source: 'owner/demo-skill', ref, computedHash }
+      }
+    }, { projectDir });
+
+    expect(result?.failed).toHaveLength(1);
+    expect(readFileSync(join(targetDir, 'SKILL.md'), 'utf-8')).toBe('# original content\n');
+    expect(readFileSync(join(projectDir, 'skills-lock.json'), 'utf-8')).toBe(originalLock);
   });
 });

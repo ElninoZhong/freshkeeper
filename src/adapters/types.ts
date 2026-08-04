@@ -1,3 +1,5 @@
+import type { AdapterLockState } from '../lockfile.js';
+
 export interface DetectResult {
   installed: boolean;
   version?: string;
@@ -25,4 +27,10 @@ export interface Adapter {
   detect(): Promise<DetectResult>;
   check(): Promise<UpdateInfo[]>;
   update(): Promise<UpdateResult>;
+  captureLock?(context: LockContext): Promise<AdapterLockState>;
+  restoreLock?(lock: AdapterLockState, context: LockContext): Promise<UpdateResult>;
+}
+
+export interface LockContext {
+  projectDir: string;
 }

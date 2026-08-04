@@ -34,6 +34,9 @@ npx freshkeeper@latest init
 | `freshkeeper list` | 查看当前支持的工具里，哪些已经安装，以及各自版本 |
 | `freshkeeper check` | 检查有没有可更新内容（支持的地方会尽量用 dry-run） |
 | `freshkeeper update` | 更新所有已安装工具，然后输出本次更新到的 changelog |
+| `freshkeeper lock` | 把当前项目的精确版本写入 `freshkeeper.lock.json` |
+| `freshkeeper restore` | 按最近一层项目锁恢复并校验版本 |
+| `freshkeeper update --respect-lock` | 遵守项目锁，不越过已锁定版本 |
 | `freshkeeper schedule <cron>` | 安装一条 crontab 定时任务；用 `schedule off` 删除 |
 
 ## 支持的工具
@@ -58,6 +61,16 @@ npx freshkeeper@latest init
 ```
 
 `enabledAdapters` 是真实执行边界：未写入数组的 adapter 不会被检测或更新；未知 ID 会明确报错，不会静默忽略。
+
+## 项目级锁定
+
+在项目根目录运行 `freshkeeper lock`，会生成可审查、可提交到仓库的 `freshkeeper.lock.json`。第一版锁定范围包括 Claude Code 精确版本、已安装 Claude plugins 清单、Skills CLI 精确版本，以及同时记录 40 位 Git commit 和 SHA-256 内容哈希的 GitHub skills。
+
+`freshkeeper restore` 会向上寻找最近一层项目锁；`freshkeeper update --respect-lock` 走同一条恢复链，显式遵守锁的更新不会悄悄越过项目声明的版本。`enabledAdapters` 中已关闭的 adapter 仍然不会被触碰；普通的全局 `freshkeeper update` 行为保持不变。
+
+Skills 会先安装到临时项目，核对 commit 和内容哈希，再备份、应用并做一次落盘后校验。中途任一步失败，都会恢复原来的项目 skill 和 `skills-lock.json`。
+
+Claude Code 支持安装精确版本。Claude plugins 官方命令没有通用的降级能力：Freshkeeper 会在锁定版本仍可获得时完成安装或升级，并校验最终版本和启用状态；如果需要降级或 marketplace 已不再提供该版本，就明确失败，不会假装恢复成功。额外的全局 plugin 不会被删除。
 
 ### Skills 安全规则
 
@@ -90,7 +103,7 @@ A：已经在 v1.1 的路线图里。
 ## 路线图
 正在推进，欢迎在 issue 里一起讨论。
 
-- [ ] [#1 项目级 lockfile 支持](https://github.com/ElninoZhong/freshkeeper/issues/1)——把一个项目依赖的 CLI + plugin + skill 版本锁住，避免版本错配被误判为模型问题
+- [x] [#1 项目级 lockfile 支持](https://github.com/ElninoZhong/freshkeeper/issues/1)——按项目锁定、恢复并遵守 Claude Code、plugin、Skills CLI 与 GitHub skill 的精确版本
 - [ ] Cursor / Windsurf / Aider / Gemini CLI 适配器（v1.1）
 - [ ] 更新完自动发 macOS 原生通知
 - [ ] Windows 支持（走 Task Scheduler）
