@@ -9,7 +9,7 @@
 - **Project skill lock**: the nearest valid `skills-lock.json`, or the lock selected by `FRESHKEEPER_SKILLS_CWD`.
 - **Project toolchain lock**: the nearest valid `freshkeeper.lock.json`; it records exact adapter state that `restore` and `update --respect-lock` must verify before claiming success.
 - **Freshkeeper check Skill**: the repository-owned read-only inventory and upstream-comparison workflow that prefers the shared user library and falls back to supported agent-local libraries when needed.
-- **Freshkeeper update Skill**: the repository-owned backup-first workflow for updating source-tracked Skills in the selected shared or agent-local libraries while preserving local, untracked, symlinked, and upstream-deleted entries.
+- **Freshkeeper update Skill**: the repository-owned backup-first workflow for updating recorded or evidence-recovered Skills in the selected shared or agent-local libraries while preserving local, untracked, symlinked, and upstream-deleted entries.
 - **Provenance recovery**: the read-only evidence chain that maps an untracked installed Skill to a confirmed repository and path through a verified catalog, embedded Git remote, explicit metadata, NOTICE, or README plus official-tree comparison.
 - **Installed snapshot**: the normalized map of relative file paths to Git blob SHA values for one physical Skill, excluding only runtime artifacts.
 - **Clean-old Skill**: an installed snapshot that matches a historical upstream tree and therefore has a proven three-way update base.

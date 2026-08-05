@@ -1,4 +1,6 @@
-# Freshkeeper Implementation Plan
+# Historical Freshkeeper Initial Implementation Plan
+
+> **Historical snapshot:** This document predates the current v1.2.0 implementation. Its unchecked steps, dependency list, command examples, and safety model are not current project guidance and must not be executed as instructions. Use [`../README.md`](../README.md) for current usage, [`../SOURCE_OF_TRUTH.md`](../SOURCE_OF_TRUTH.md) for authority, [`../CONTEXT.md`](../CONTEXT.md) for the current domain model, and `src/` plus `tests/` for implemented behavior.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

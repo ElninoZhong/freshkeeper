@@ -43,7 +43,7 @@ npx skills add ElninoZhong/freshkeeper --skill freshkeeper-update -g -y
 |---|---|
 | `freshkeeper init` | 交互式初始化：检测已安装工具、执行第一次更新、安装每周计划任务 |
 | `freshkeeper list` | 查看当前支持的工具里，哪些已经安装，以及各自版本 |
-| `freshkeeper check` | 检查有没有可更新内容（支持的地方会尽量用 dry-run） |
+| `freshkeeper check` | 执行非写入式 adapter 检查；没有 preflight 的 adapter 只能在 `update` 后报告变化 |
 | `freshkeeper update` | 更新所有已安装工具，然后输出本次更新到的 changelog |
 | `freshkeeper lock` | 把当前项目的精确版本写入 `freshkeeper.lock.json` |
 | `freshkeeper restore` | 按最近一层项目锁恢复并校验版本 |
@@ -119,10 +119,10 @@ A：仍在路线图中。
 - [ ] Cursor / Windsurf / Aider / Gemini CLI 适配器
 - [ ] 更新完自动发 macOS 原生通知
 - [ ] Windows 支持（走 Task Scheduler）
-- [ ] GitHub Actions OIDC + Trusted Publisher 自动发版
+- [x] GitHub Actions OIDC + Trusted Publisher 自动发版
 
 ## 参与贡献
-如果你想了解项目结构、实现思路，先看 [`docs/`](docs/)。如果你想新增一个适配器，建议从 [`docs/plan.md`](docs/plan.md) 开始。
+当前权威与安全边界见 [`SOURCE_OF_TRUTH.md`](SOURCE_OF_TRUTH.md) 和 [`CONTEXT.md`](CONTEXT.md)。新增 adapter 请从 [`src/adapters/types.ts`](src/adapters/types.ts)、[`src/adapters/catalog.ts`](src/adapters/catalog.ts) 和 [`tests/adapters/`](tests/adapters/) 开始；[`docs/plan.md`](docs/plan.md) 是历史初始施工计划，不是现役接入指南。
 
 ## 许可证
 MIT

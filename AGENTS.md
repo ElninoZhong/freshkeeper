@@ -15,7 +15,7 @@ These rules apply to the entire repository.
 - Never delete, move, prune, reconcile, or broadly rewrite shared skills as part of tests, migration, inspection, or cleanup.
 - Tests must mock every updater and must not run `freshkeeper update`, `freshkeeper init`, `skills update`, `skills add`, or a real schedule mutation.
 - Missing, empty, or malformed `skills-lock.json` must fail closed. A broader global skill update requires the explicit `FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE=1` opt-in.
-- Any future transactional skill updater must stage changes, verify its declared revision and inventory, preserve a recovery copy, and roll back partial failure before it may claim success.
+- Transactional skill updaters must stage changes, verify their declared revision and inventory, preserve a recovery copy, and roll back partial failure before they may claim success.
 
 ## Engineering practice
 

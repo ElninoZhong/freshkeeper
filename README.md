@@ -38,7 +38,7 @@ These Agent Skills manage the user's installed Skill libraries, not the Freshkee
 |---|---|
 | `freshkeeper init` | Interactive setup: detect agents, run first update, install weekly schedule |
 | `freshkeeper list` | Show which supported agents are installed + their versions |
-| `freshkeeper check` | Show pending updates (dry-run where supported) |
+| `freshkeeper check` | Run non-mutating adapter checks; adapters without a preflight report changes only after `update` |
 | `freshkeeper update` | Update everything installed, then print changelog for updated tools |
 | `freshkeeper lock` | Snapshot exact project versions into `freshkeeper.lock.json` |
 | `freshkeeper restore` | Restore and verify the nearest project lock |
@@ -104,7 +104,7 @@ A: When it finds a valid `skills-lock.json`, it refreshes each GitHub-backed ski
 A: Configure `enabledAdapters` first and review every updater you enable. Freshkeeper now fails closed around skill locks and crontab writes, but enabled adapters still run real third-party update commands.
 
 **Q: What about Cursor / Windsurf / Aider?**  
-A: On the roadmap for v1.1.
+A: Still on the roadmap.
 
 ## Roadmap
 Actively planned, open to co-design — drop thoughts in the linked issues.
@@ -114,10 +114,10 @@ Actively planned, open to co-design — drop thoughts in the linked issues.
 - [ ] Cursor / Windsurf / Aider / Gemini CLI adapters
 - [ ] macOS native notifications on update complete
 - [ ] Windows support via Task Scheduler
-- [ ] Trusted Publisher auto-release via GitHub Actions OIDC
+- [x] Trusted Publisher auto-release via GitHub Actions OIDC
 
 ## Contributing
-See [`docs/`](docs/) for architecture notes and implementation context. If you want to add a new adapter, start with [`docs/plan.md`](docs/plan.md).
+Read [`SOURCE_OF_TRUTH.md`](SOURCE_OF_TRUTH.md) and [`CONTEXT.md`](CONTEXT.md) for the current authority and safety model. To add an adapter, start with [`src/adapters/types.ts`](src/adapters/types.ts), [`src/adapters/catalog.ts`](src/adapters/catalog.ts), and the adapter tests under [`tests/adapters/`](tests/adapters/). [`docs/plan.md`](docs/plan.md) is the historical initial implementation plan, not current guidance.
 
 ## License
 MIT

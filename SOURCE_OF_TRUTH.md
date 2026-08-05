@@ -1,6 +1,6 @@
 # Freshkeeper Source of Truth
 
-Status: canonical path migration and Phase 4A safety hardening completed on 2026-07-18.
+Status: canonical path migration complete; Freshkeeper v1.2.0 released and its shared Agent Skills synced on 2026-08-04.
 
 ## Authority map
 
@@ -18,6 +18,16 @@ Status: canonical path migration and Phase 4A safety hardening completed on 2026
 | Domain language | `CONTEXT.md` | Names update concepts and safety invariants. |
 | Claude compatibility | `CLAUDE.md` | Thin pointer only. |
 | Product behavior | `src/`, verified by `tests/` | Documentation follows implemented and tested behavior. |
+| Published release | `package.json`, the matching Git tag/GitHub Release, and npm `latest` | All published surfaces must agree before a release is called live. |
+
+## Current published state
+
+Verified on 2026-08-05:
+
+- `package.json`, Git tag `v1.2.0`, the non-draft GitHub Release, and npm `latest` all identify version `1.2.0`.
+- Tag `v1.2.0` points to merged commit `6699c293cf9ee6a93dd6e3e5db1efe10f4703892`.
+- npm exposes an SLSA provenance attestation for `freshkeeper@1.2.0`.
+- The installed shared copies of `freshkeeper-check` and `freshkeeper-update` match the repository Skill sources.
 
 ## Migration state
 
