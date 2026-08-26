@@ -1,6 +1,6 @@
 # Freshkeeper Source of Truth
 
-Status: canonical path migration complete; Freshkeeper v1.2.0 remains the published release, while `main` contains the unreleased Git tree-SHA fix at `7950c94189382b8b1eec5d6b75b434e3c5226c29` and its shared Agent Skills were synced on 2026-08-26.
+Status: canonical path migration complete; Freshkeeper v1.2.1 was released and live-verified on 2026-08-26, and its shared Agent Skills match the released source.
 
 ## Authority map
 
@@ -24,18 +24,18 @@ Status: canonical path migration complete; Freshkeeper v1.2.0 remains the publis
 
 Verified on 2026-08-26:
 
-- `package.json`, Git tag `v1.2.0`, the non-draft GitHub Release, and npm `latest` all identify version `1.2.0`.
-- Tag `v1.2.0` points to merged commit `6699c293cf9ee6a93dd6e3e5db1efe10f4703892`.
-- npm exposes an SLSA provenance attestation for `freshkeeper@1.2.0`.
+- `package.json`, Git tag `v1.2.1`, the non-draft GitHub Release, and npm `latest` all identify version `1.2.1`.
+- Tag `v1.2.1` points to release commit `037ba7c0ee9f8f53fe12556cac6b84437565a3f4`.
+- The GitHub Release workflow completed successfully and published both the [v1.2.1 Release](https://github.com/ElninoZhong/freshkeeper/releases/tag/v1.2.1) and npm package.
+- npm exposes an SLSA provenance attestation for `freshkeeper@1.2.1`; the downloaded official tarball contains the Git tree-SHA fix in both Freshkeeper Skill packages.
 
 ## Current development state
 
 Verified on 2026-08-26:
 
-- Local `main`, `origin/main`, and GitHub `main` point to `7950c94189382b8b1eec5d6b75b434e3c5226c29` (`fix: compare recovered skills by Git tree SHA`).
-- GitHub CI passed for that commit; local lint, 76 tests, build, package dry run, and both Skill validators also passed.
-- The installed shared copies of `freshkeeper-check` and `freshkeeper-update` exactly match the repository Skill sources at `main`.
-- The fix has not been released: `package.json`, the latest tag/Release, and npm `latest` remain `1.2.0`. A `1.2.1` patch release is pending explicit publication authorization.
+- There are no unreleased product-code changes after the tagged v1.2.1 release; `main` adds only this post-release knowledge receipt.
+- GitHub CI passed on the tagged commit; local lint, 76 tests, build, package dry run, and both Skill validators also passed.
+- The installed shared copies of `freshkeeper-check` and `freshkeeper-update` exactly match the Skill sources in v1.2.1.
 
 ## Migration state
 
