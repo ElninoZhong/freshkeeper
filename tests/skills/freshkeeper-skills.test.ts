@@ -12,7 +12,8 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { auditProvenance } from '../../skills/freshkeeper-update/scripts/provenance.mjs';
 
 const checkScript = resolve('skills/freshkeeper-check/scripts/check-installed-skills.mjs');
 const updatePlanner = resolve('skills/freshkeeper-update/scripts/prepare-skill-update.mjs');
@@ -78,6 +79,7 @@ function runJson(script: string, args: string[]): any {
 }
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   for (const path of temporaryHomes.splice(0)) rmSync(path, { recursive: true, force: true });
 });
 
@@ -270,6 +272,45 @@ describe('Freshkeeper installed-Skill library discovery', () => {
     expect(result.updatesAvailable).toBe(2);
     expect(result.manualMerge).toBe(1);
     expect(result.legacyLocal).toBe(1);
+  });
+
+  it('records the Git tree SHA rather than the commit SHA for recovered upstreams', async () => {
+    const home = temporaryHome();
+    const root = join(home, '.agents', 'skills');
+    const skillDir = writeSkill(root, 'alpha');
+    const skillContent = readFileSync(join(skillDir, 'SKILL.md'));
+    const catalog = join(home, 'catalog.json');
+    writeJson(catalog, {
+      version: 1,
+      repositories: [{ source: 'owner/repo', skills: { alpha: 'skills/alpha' } }]
+    });
+
+    const tree = [{
+      type: 'blob',
+      path: 'skills/alpha/SKILL.md',
+      sha: blobSha(skillContent.toString('utf8'))
+    }];
+    vi.stubGlobal('fetch', async (input: string | URL) => {
+      const url = String(input);
+      if (url.endsWith('/commits/HEAD')) {
+        return Response.json({ sha: 'commit-sha', commit: { tree: { sha: 'tree-sha' } } });
+      }
+      if (url.includes('/git/trees/tree-sha?recursive=1')) {
+        return Response.json({ sha: 'tree-sha', tree });
+      }
+      if (url.includes('/git/trees/HEAD?recursive=1')) {
+        return Response.json({ sha: 'commit-sha', tree });
+      }
+      return new Response('not found', { status: 404 });
+    });
+
+    const result = await auditProvenance({
+      skills: [{ name: 'alpha', folder: 'alpha', path: skillDir, realPath: skillDir }],
+      catalogPath: catalog,
+      historyLimit: 0
+    });
+
+    expect(result.get(skillDir)?.upstreamTreeHash).toBe('tree-sha');
   });
 
   it('applies a clean historical update transactionally from a verified plan', () => {

@@ -216,14 +216,21 @@ async function fetchCurrentTree(source, token) {
   let lastError;
   for (const ref of ['HEAD', 'main', 'master']) {
     try {
+      const commit = await requestJson(
+        `https://api.github.com/repos/${source}/commits/${encodeURIComponent(ref)}`,
+        token
+      );
+      const treeSha = commit?.commit?.tree?.sha;
+      if (!treeSha) throw new Error('GitHub commit response has no tree SHA');
       const data = await requestJson(
-        `https://api.github.com/repos/${source}/git/trees/${ref}?recursive=1`,
+        `https://api.github.com/repos/${source}/git/trees/${treeSha}?recursive=1`,
         token
       );
       if (!data?.sha || !Array.isArray(data.tree) || data.truncated) {
         throw new Error('GitHub returned an incomplete tree');
       }
-      return { ...data, ref };
+      if (data.sha !== treeSha) throw new Error('GitHub returned an unexpected tree SHA');
+      return { ...data, sha: treeSha, commitSha: commit.sha, ref };
     } catch (error) {
       lastError = error;
     }

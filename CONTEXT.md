@@ -12,6 +12,7 @@
 - **Freshkeeper update Skill**: the repository-owned backup-first workflow for updating recorded or evidence-recovered Skills in the selected shared or agent-local libraries while preserving local, untracked, symlinked, and upstream-deleted entries.
 - **Provenance recovery**: the read-only evidence chain that maps an untracked installed Skill to a confirmed repository and path through a verified catalog, embedded Git remote, explicit metadata, NOTICE, or README plus official-tree comparison.
 - **Installed snapshot**: the normalized map of relative file paths to Git blob SHA values for one physical Skill, excluding only runtime artifacts.
+- **Upstream tree identity**: the Git tree SHA referenced by an upstream commit's `commit.tree.sha`; it is distinct from the commit SHA and is the only identity compared with a cloned repository's `HEAD^{tree}` during recovered updates.
 - **Clean-old Skill**: an installed snapshot that matches a historical upstream tree and therefore has a proven three-way update base.
 - **Current subset**: an installation whose files all match current upstream but which lacks upstream resources that can be added without overwriting local work.
 - **Manual merge**: a recovered source where local and upstream content both differ and no clean historical base proves a safe automatic update.
@@ -33,3 +34,4 @@
 9. The check Skill never mutates any Skill library; the update Skill never targets agent binaries, guesses missing sources, installs newly discovered Skills, deletes pre-existing Skills, or migrates agent-local libraries into a shared library.
 10. Recovered provenance remains evidence, not authority: it is never written into the global lock without explicit confirmation.
 11. A recovered-source update crosses the mutation seam only after backup, installed-snapshot, upstream-tree, and historical-base verification; a partial failure restores the affected Skill.
+12. A recovered update plan stores the upstream commit's Git tree SHA, not the commit SHA; the executor revalidates that value against the cloned repository's `HEAD^{tree}` before applying any file action.
