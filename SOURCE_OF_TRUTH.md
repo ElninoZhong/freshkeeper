@@ -1,6 +1,6 @@
 # Freshkeeper Source of Truth
 
-Status: canonical path migration complete; Freshkeeper v1.2.0 released and its shared Agent Skills synced on 2026-08-04.
+Status: canonical path migration complete; Freshkeeper v1.2.0 remains the published release, while `main` contains the unreleased Git tree-SHA fix at `7950c94189382b8b1eec5d6b75b434e3c5226c29` and its shared Agent Skills were synced on 2026-08-26.
 
 ## Authority map
 
@@ -22,12 +22,20 @@ Status: canonical path migration complete; Freshkeeper v1.2.0 released and its s
 
 ## Current published state
 
-Verified on 2026-08-05:
+Verified on 2026-08-26:
 
 - `package.json`, Git tag `v1.2.0`, the non-draft GitHub Release, and npm `latest` all identify version `1.2.0`.
 - Tag `v1.2.0` points to merged commit `6699c293cf9ee6a93dd6e3e5db1efe10f4703892`.
 - npm exposes an SLSA provenance attestation for `freshkeeper@1.2.0`.
-- The installed shared copies of `freshkeeper-check` and `freshkeeper-update` match the repository Skill sources.
+
+## Current development state
+
+Verified on 2026-08-26:
+
+- Local `main`, `origin/main`, and GitHub `main` point to `7950c94189382b8b1eec5d6b75b434e3c5226c29` (`fix: compare recovered skills by Git tree SHA`).
+- GitHub CI passed for that commit; local lint, 76 tests, build, package dry run, and both Skill validators also passed.
+- The installed shared copies of `freshkeeper-check` and `freshkeeper-update` exactly match the repository Skill sources at `main`.
+- The fix has not been released: `package.json`, the latest tag/Release, and npm `latest` remain `1.2.0`. A `1.2.1` patch release is pending explicit publication authorization.
 
 ## Migration state
 
