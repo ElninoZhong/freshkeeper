@@ -1,6 +1,6 @@
 # Freshkeeper Source of Truth
 
-Status: canonical path migration complete; Freshkeeper v1.2.1 was released and live-verified on 2026-08-26, and its shared Agent Skills match the released source.
+Status: canonical path migration complete; Freshkeeper v1.3.0 was released and live-verified on 2026-08-31, and its shared Agent Skills match the released source.
 
 ## Authority map
 
@@ -23,22 +23,22 @@ Status: canonical path migration complete; Freshkeeper v1.2.1 was released and l
 
 ## Current published state
 
-Verified on 2026-08-26:
+Verified on 2026-08-31:
 
-- `package.json`, Git tag `v1.2.1`, the non-draft GitHub Release, and npm `latest` all identify version `1.2.1`.
-- Tag `v1.2.1` points to release commit `037ba7c0ee9f8f53fe12556cac6b84437565a3f4`.
-- The GitHub Release workflow completed successfully and published both the [v1.2.1 Release](https://github.com/ElninoZhong/freshkeeper/releases/tag/v1.2.1) and npm package.
-- npm exposes an SLSA provenance attestation for `freshkeeper@1.2.1`; the downloaded official tarball contains the Git tree-SHA fix in both Freshkeeper Skill packages.
+- `package.json`, Git tag `v1.3.0`, the non-draft GitHub Release, and npm `latest` all identify version `1.3.0`.
+- Tag `v1.3.0` points to release commit `fa97ea031d1b538e66cbfe99702c5a9138e01da8`.
+- The GitHub Release workflow completed successfully and published both the [v1.3.0 Release](https://github.com/ElninoZhong/freshkeeper/releases/tag/v1.3.0) and npm package.
+- npm exposes an SLSA provenance attestation for `freshkeeper@1.3.0`; the downloaded official tarball contains the ownership-aware MCP adapter and its update policies.
 
 ## Current development state
 
 Verified on 2026-08-31:
 
-- The working development line adds the unreleased `mcp-components` adapter: ownership-aware inventory, version checks for `claude-mem` / `mcp-remote` / `gbrain`, automatic update verification only for `claude-mem`, and explicit risk skips for the other two.
+- There are no unreleased product-code changes after the tagged v1.3.0 release; `main` adds only this post-release knowledge receipt.
 - The public Adapter seam is covered by synthetic command/registry tests; no test starts, updates, or rewrites a real MCP server.
 - Local lint, 82 tests, build, package dry run, and real read-only detection of the three installed versioned MCP components passed.
-- The published tag, GitHub Release, and npm `latest` remain v1.2.1. The MCP component feature has not been released.
-- The installed shared copies of `freshkeeper-check` and `freshkeeper-update` still match the repository Skill sources; this CLI adapter does not broaden either Skill's library-only scope.
+- The published v1.3.0 adapter updated local `claude-mem` from 13.10.2 to 13.18.0. The new worker is running on port 37701, Claude reports the MCP connected, both SQLite stores pass `quick_check`, and a direct memory search succeeded. `mcp-remote` and `gbrain` were explicitly skipped as designed.
+- The installed shared copies of `freshkeeper-check` and `freshkeeper-update` still match the repository Skill sources; the CLI adapter does not broaden either Skill's library-only scope.
 
 ## Migration state
 
