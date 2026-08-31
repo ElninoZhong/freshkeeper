@@ -14,6 +14,7 @@ describe('config', () => {
   it('returns defaults when file missing', () => {
     const cfg = loadConfig();
     expect(cfg).toEqual(defaultConfig());
+    expect(cfg.enabledAdapters[0]).toBe('mcp-components');
   });
 
   it('loads written config', () => {

@@ -14,6 +14,7 @@ Status: canonical path migration complete; Freshkeeper v1.2.1 was released and l
 | Project toolchain intent | The nearest valid `freshkeeper.lock.json` | `restore` and `update --respect-lock` fail closed and verify exact post-state. |
 | Agent Skill sources | `skills/freshkeeper-check/` and `skills/freshkeeper-update/` | Prefer the shared user Skill library and fall back to supported tools' own user-level libraries when it is absent; recover untracked GitHub provenance through evidence and whole-tree comparison; they do not wrap Freshkeeper's agent-tool adapters. |
 | Provenance seed | Each Skill's `references/provenance-catalog.json` | Verified source/path candidates only; current upstream content and local evidence must still validate every candidate before use. |
+| MCP component policy | `src/adapters/mcp-components.ts` | Discover configured MCPs by owner; only `claude-mem` has an automatic update-and-verify path, while risky migrations and owner-managed servers remain explicit skips or report-only. |
 | Project rules | `AGENTS.md` | Shared rules for all agents. |
 | Domain language | `CONTEXT.md` | Names update concepts and safety invariants. |
 | Claude compatibility | `CLAUDE.md` | Thin pointer only. |
@@ -31,11 +32,13 @@ Verified on 2026-08-26:
 
 ## Current development state
 
-Verified on 2026-08-26:
+Verified on 2026-08-31:
 
-- There are no unreleased product-code changes after the tagged v1.2.1 release; `main` adds only this post-release knowledge receipt.
-- GitHub CI passed on the tagged commit; local lint, 76 tests, build, package dry run, and both Skill validators also passed.
-- The installed shared copies of `freshkeeper-check` and `freshkeeper-update` exactly match the Skill sources in v1.2.1.
+- The working development line adds the unreleased `mcp-components` adapter: ownership-aware inventory, version checks for `claude-mem` / `mcp-remote` / `gbrain`, automatic update verification only for `claude-mem`, and explicit risk skips for the other two.
+- The public Adapter seam is covered by synthetic command/registry tests; no test starts, updates, or rewrites a real MCP server.
+- Local lint, 82 tests, build, package dry run, and real read-only detection of the three installed versioned MCP components passed.
+- The published tag, GitHub Release, and npm `latest` remain v1.2.1. The MCP component feature has not been released.
+- The installed shared copies of `freshkeeper-check` and `freshkeeper-update` still match the repository Skill sources; this CLI adapter does not broaden either Skill's library-only scope.
 
 ## Migration state
 

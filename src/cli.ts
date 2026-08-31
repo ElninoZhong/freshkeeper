@@ -41,7 +41,7 @@ export async function run(): Promise<void> {
 
   program
     .command('update')
-    .description('Update all installed agents (CLI + plugins + skills)')
+    .description('Update installed agents, plugins, skills, and safely managed MCP components')
     .option('--respect-lock', 'Restore and verify versions from the nearest freshkeeper.lock.json')
     .action(async (options: { respectLock?: boolean }) => {
       const r = configuredRegistry();

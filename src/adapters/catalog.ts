@@ -2,12 +2,14 @@ import { claudeCodeAdapter } from './claude-code.js';
 import { claudePluginsAdapter } from './claude-plugins.js';
 import { codexAdapter } from './codex.js';
 import { hermesAdapter } from './hermes.js';
+import { mcpComponentsAdapter } from './mcp-components.js';
 import { openClawAdapter } from './openclaw.js';
 import { Registry } from './registry.js';
 import { skillsCliAdapter } from './skills-cli.js';
 import type { Adapter } from './types.js';
 
 const knownAdapters: Adapter[] = [
+  mcpComponentsAdapter,
   claudeCodeAdapter,
   claudePluginsAdapter,
   skillsCliAdapter,

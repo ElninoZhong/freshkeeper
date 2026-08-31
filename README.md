@@ -11,7 +11,7 @@ The unified update keeper for OpenClaw, Hermes, Claude Code, and Codex users.
 > 📹 Demo GIF coming soon
 
 ## Why Freshkeeper?
-If you use multiple AI coding agents and their extensions, updates get scattered fast. Freshkeeper gives you one command to update Claude Code, Codex, OpenClaw, Hermes, plugins, and skills in one pass, then prints the changelogs so you can see what changed without checking each tool manually.
+If you use multiple AI coding agents and their extensions, updates get scattered fast. Freshkeeper gives you one command to update Claude Code, Codex, OpenClaw, Hermes, plugins, skills, and safely managed local MCP components in one pass, then prints the changelogs so you can see what changed without checking each tool manually.
 
 ## Install & First Run
 Use the zero-config path:
@@ -39,7 +39,7 @@ These Agent Skills manage the user's installed Skill libraries, not the Freshkee
 | `freshkeeper init` | Interactive setup: detect agents, run first update, install weekly schedule |
 | `freshkeeper list` | Show which supported agents are installed + their versions |
 | `freshkeeper check` | Run non-mutating adapter checks; adapters without a preflight report changes only after `update` |
-| `freshkeeper update` | Update everything installed, then print changelog for updated tools |
+| `freshkeeper update` | Update installed tools and safe MCP components; report explicit skips and print changelogs |
 | `freshkeeper lock` | Snapshot exact project versions into `freshkeeper.lock.json` |
 | `freshkeeper restore` | Restore and verify the nearest project lock |
 | `freshkeeper update --respect-lock` | Enforce the nearest lock instead of moving past pinned versions |
@@ -48,6 +48,7 @@ These Agent Skills manage the user's installed Skill libraries, not the Freshkee
 ## Supported Agents
 | Adapter ID | Display name | Install | What gets updated |
 |---|---|---|---|
+| `mcp-components` | MCP Components | discovered from `codex mcp list --json` | Checks `claude-mem`, `mcp-remote`, and `gbrain`; automatically updates and verifies only `claude-mem` |
 | `claude-code` | Claude Code CLI | official installer | `claude update` |
 | `claude-plugins` | Claude Code Plugins | via `claude plugin install` | each plugin via `claude plugin update <name>` |
 | `skills-cli` | Skills CLI (`skills.sh`) | `npm i -g skills` or pinned `npx` fallback | Refresh GitHub skills listed by a valid `skills-lock.json`; missing or malformed locks fail closed |
@@ -60,7 +61,7 @@ Location: `~/.freshkeeper/config.json`
 
 ```json
 {
-  "enabledAdapters": ["claude-code", "claude-plugins", "skills-cli", "codex", "openclaw", "hermes"],
+  "enabledAdapters": ["mcp-components", "claude-code", "claude-plugins", "skills-cli", "codex", "openclaw", "hermes"],
   "schedule": { "enabled": true, "cron": "0 10 * * 1" },
   "notify": { "enabled": true, "macNotification": false }
 }
@@ -85,6 +86,14 @@ Claude Code supports exact-version installs. Claude plugins do not expose a gene
 - A broad `skills update -y` runs only when `FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE=1` is explicitly set.
 - The automatic npx fallback uses a pinned Skills CLI package instead of whichever cached copy has the newest timestamp.
 
+### MCP component safety
+
+- Freshkeeper classifies configured MCP servers by owner instead of treating every server as an npm package.
+- `claude-mem` is updated through the Claude plugin manager, then its installed version, worker restart, and MCP connection are checked.
+- `mcp-remote` is reported but skipped until a staged install, real `initialize`/`tools/list` verification, config switch, and rollback are available.
+- `gbrain` is reported but skipped until its data and configuration are backed up, migrations run, and both `doctor` and an MCP probe pass.
+- Remote HTTP MCPs and MCPs bundled with apps or plugins are owner-managed and are never locally overwritten by this adapter.
+
 ## Schedule
 ```bash
 freshkeeper schedule "0 10 * * 1"   # every Monday 10am
@@ -103,6 +112,9 @@ A: When it finds a valid `skills-lock.json`, it refreshes each GitHub-backed ski
 **Q: Is it safe to run automatically?**  
 A: Configure `enabledAdapters` first and review every updater you enable. Freshkeeper now fails closed around skill locks and crontab writes, but enabled adapters still run real third-party update commands.
 
+**Q: Does Freshkeeper update every configured MCP server?**
+A: No. It checks ownership first. Only `claude-mem` currently has an automatic update-and-verify path; risky local migrations are explicit skips, and remote or host-managed MCPs remain report-only.
+
 **Q: What about Cursor / Windsurf / Aider?**  
 A: Still on the roadmap.
 
@@ -111,6 +123,7 @@ Actively planned, open to co-design — drop thoughts in the linked issues.
 
 - [x] [#1 Per-project lockfile support](https://github.com/ElninoZhong/freshkeeper/issues/1) — lock, restore, and respect exact Claude Code, plugin, Skills CLI, and GitHub skill revisions per project
 - [x] Separate `freshkeeper-check` and `freshkeeper-update` Agent Skills for the user's installed Skill library, with provenance recovery, history matching, three-way updates, backup, and non-destructive boundaries
+- [x] Ownership-aware MCP component inventory with automatic `claude-mem` update verification and explicit risk skips
 - [ ] Cursor / Windsurf / Aider / Gemini CLI adapters
 - [ ] macOS native notifications on update complete
 - [ ] Windows support via Task Scheduler

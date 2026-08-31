@@ -7,6 +7,11 @@ describe('adapter catalog', () => {
     expect(registry.list().map((adapter) => adapter.id)).toEqual(['claude-code', 'skills-cli']);
   });
 
+  it('exposes the ownership-aware MCP adapter through the registry seam', () => {
+    const registry = buildRegistry(['mcp-components']);
+    expect(registry.list().map((adapter) => adapter.id)).toEqual(['mcp-components']);
+  });
+
   it('rejects unknown adapter ids instead of silently ignoring configuration mistakes', () => {
     expect(() => buildRegistry(['claude-code', 'missing-adapter'])).toThrow(/unknown adapter/i);
   });

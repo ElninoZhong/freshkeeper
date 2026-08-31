@@ -90,23 +90,28 @@ export const claudePluginsAdapter: Adapter = {
     return [];
   },
 
-  async update() {
+  async update(context) {
     const list = await safeExec('claude', ['plugin', 'list']);
     if (!list.ok) return { updated: [], failed: [{ item: 'plugin-list', error: list.stderr || 'list failed' }], logs: list.stderr };
 
     const plugins = parsePluginList(list.stdout);
     const updated: string[] = [];
     const failed: Array<{ item: string; error: string }> = [];
+    const skipped: Array<{ item: string; reason: string }> = [];
     const logs: string[] = [];
 
     for (const p of plugins) {
       const id = `${p.name}@${p.source}`;
+      if (id === 'claude-mem@thedotmack' && context?.enabledAdapterIds.includes('mcp-components')) {
+        skipped.push({ item: id, reason: 'managed by mcp-components' });
+        continue;
+      }
       const r = await safeExec('claude', ['plugin', 'update', id]);
       logs.push(`[${id}] ${r.stdout.trim()}`);
       if (r.ok) updated.push(id);
       else failed.push({ item: id, error: r.stderr || 'update failed' });
     }
-    return { updated, failed, logs: logs.join('\n') };
+    return { updated, failed, skipped, logs: logs.join('\n') };
   },
 
   async captureLock(context) {

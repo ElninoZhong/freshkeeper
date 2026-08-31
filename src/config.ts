@@ -9,7 +9,15 @@ export interface Config {
 
 export function defaultConfig(): Config {
   return {
-    enabledAdapters: ['claude-code', 'claude-plugins', 'skills-cli', 'codex', 'openclaw', 'hermes'],
+    enabledAdapters: [
+      'mcp-components',
+      'claude-code',
+      'claude-plugins',
+      'skills-cli',
+      'codex',
+      'openclaw',
+      'hermes'
+    ],
     schedule: null,
     notify: { enabled: true, macNotification: false }
   };

@@ -16,7 +16,7 @@ The unified update keeper for OpenClaw, Hermes, Claude Code, and Codex users.
 > 📹 Demo GIF 即将补上
 
 ## 为什么要用 Freshkeeper？
-现在很多人电脑里会同时装好几个 AI coding 工具，像 Claude Code、Codex、OpenClaw、Hermes，再加上一堆 plugin 和 skill。问题是，装完以后很容易就忘了更新，结果不同工具版本越拖越乱。Freshkeeper 就是把这件事收拢成一条命令：一次帮你把这些工具更新完，再顺手把 changelog 汇总出来，你不用自己一个个进去看。
+现在很多人电脑里会同时装好几个 AI coding 工具，像 Claude Code、Codex、OpenClaw、Hermes，再加上一堆 plugin、skill 和本地 MCP 组件。问题是，装完以后很容易就忘了更新，结果不同工具版本越拖越乱。Freshkeeper 就是把这件事收拢成一条命令：一次帮你更新具备安全更新路径的组件，再把高风险跳过项和 changelog 明确列出来。
 
 ## 安装与第一次运行
 最省事的方式是直接运行：
@@ -44,7 +44,7 @@ npx skills add ElninoZhong/freshkeeper --skill freshkeeper-update -g -y
 | `freshkeeper init` | 交互式初始化：检测已安装工具、执行第一次更新、安装每周计划任务 |
 | `freshkeeper list` | 查看当前支持的工具里，哪些已经安装，以及各自版本 |
 | `freshkeeper check` | 执行非写入式 adapter 检查；没有 preflight 的 adapter 只能在 `update` 后报告变化 |
-| `freshkeeper update` | 更新所有已安装工具，然后输出本次更新到的 changelog |
+| `freshkeeper update` | 更新已安装工具和安全 MCP 组件，报告显式跳过项并输出 changelog |
 | `freshkeeper lock` | 把当前项目的精确版本写入 `freshkeeper.lock.json` |
 | `freshkeeper restore` | 按最近一层项目锁恢复并校验版本 |
 | `freshkeeper update --respect-lock` | 遵守项目锁，不越过已锁定版本 |
@@ -53,6 +53,7 @@ npx skills add ElninoZhong/freshkeeper --skill freshkeeper-update -g -y
 ## 支持的工具
 | 适配器 ID | 显示名称 | 安装方式 | 会更新什么 |
 |---|---|---|---|
+| `mcp-components` | MCP Components | 从 `codex mcp list --json` 发现 | 检查 `claude-mem`、`mcp-remote`、`gbrain`；目前只自动更新并验证 `claude-mem` |
 | `claude-code` | Claude Code CLI | 官方安装器 | `claude update` |
 | `claude-plugins` | Claude Code Plugins | 通过 `claude plugin install` 安装 | 每个插件用 `claude plugin update <name>` 更新 |
 | `skills-cli` | Skills CLI (`skills.sh`) | `npm i -g skills` 或固定版本的 `npx` 回退 | 只刷新有效 `skills-lock.json` 中列出的 GitHub skill；lock 缺失或损坏时 fail closed |
@@ -65,7 +66,7 @@ npx skills add ElninoZhong/freshkeeper --skill freshkeeper-update -g -y
 
 ```json
 {
-  "enabledAdapters": ["claude-code", "claude-plugins", "skills-cli", "codex", "openclaw", "hermes"],
+  "enabledAdapters": ["mcp-components", "claude-code", "claude-plugins", "skills-cli", "codex", "openclaw", "hermes"],
   "schedule": { "enabled": true, "cron": "0 10 * * 1" },
   "notify": { "enabled": true, "macNotification": false }
 }
@@ -90,6 +91,14 @@ Claude Code 支持安装精确版本。Claude plugins 官方命令没有通用�
 - 只有显式设置 `FRESHKEEPER_ALLOW_GLOBAL_SKILLS_UPDATE=1`，才允许执行宽泛的 `skills update -y`。
 - 自动 npx 回退使用固定版本的 Skills CLI，不再选择 npm 缓存里修改时间最新的副本。
 
+### MCP 组件安全规则
+
+- Freshkeeper 先判断 MCP 的所有者，不把所有服务器都当成 npm 包。
+- `claude-mem` 通过 Claude 插件管理器更新，并复核安装版本、worker 重启和 MCP 连接。
+- `mcp-remote` 在具备分阶段安装、真实 `initialize`/`tools/list` 验证、配置切换和回滚之前只报告并跳过。
+- `gbrain` 在备份数据与配置、执行迁移并通过 `doctor` 和 MCP 探针之前只报告并跳过。
+- 远程 HTTP MCP，以及随 App/插件分发的 MCP，由其所有者更新，本 adapter 不会本地覆盖。
+
 ## 定时更新
 ```bash
 freshkeeper schedule "0 10 * * 1"   # 每周一上午 10 点
@@ -108,6 +117,9 @@ A：只有找到有效 `skills-lock.json` 时，才会对其中 GitHub 来源的
 **Q：可以放心开自动运行吗？**  
 A：先配置好 `enabledAdapters`，并确认每个启用的更新器都符合你的预期。Skills lock 与 crontab 现在会 fail closed，但启用的 adapter 仍然会执行真实的第三方更新命令。
 
+**Q：Freshkeeper 会更新所有已配置 MCP 吗？**
+A：不会。它先判断所有权。目前只有 `claude-mem` 具备自动更新与验证链；高风险本地迁移会显式跳过，远程或宿主管理的 MCP 只报告状态。
+
 **Q：那 Cursor / Windsurf / Aider 呢？**  
 A：仍在路线图中。
 
@@ -116,6 +128,7 @@ A：仍在路线图中。
 
 - [x] [#1 项目级 lockfile 支持](https://github.com/ElninoZhong/freshkeeper/issues/1)——按项目锁定、恢复并遵守 Claude Code、plugin、Skills CLI 与 GitHub skill 的精确版本
 - [x] 面向用户已安装 Skill 库的 `freshkeeper-check` 与 `freshkeeper-update` Agent Skills——支持来源恢复、历史匹配、三方更新、备份和非破坏边界
+- [x] MCP 组件所有权盘点、`claude-mem` 自动更新验证和高风险显式跳过
 - [ ] Cursor / Windsurf / Aider / Gemini CLI 适配器
 - [ ] 更新完自动发 macOS 原生通知
 - [ ] Windows 支持（走 Task Scheduler）

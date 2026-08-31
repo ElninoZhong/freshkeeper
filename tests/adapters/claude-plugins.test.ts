@@ -40,6 +40,23 @@ describe('claude-plugins adapter', () => {
     expect(r.updated).toEqual(['claude-mem@thedotmack', 'codex@openai-codex']);
   });
 
+  it('delegates claude-mem to the MCP adapter when that adapter is enabled', async () => {
+    const spy = vi.spyOn(exec, 'safeExec')
+      .mockResolvedValueOnce({ ok: true, stdout: fixture, stderr: '' })
+      .mockResolvedValueOnce({ ok: true, stdout: 'updated codex', stderr: '' });
+
+    const result = await claudePluginsAdapter.update({
+      enabledAdapterIds: ['mcp-components', 'claude-plugins']
+    });
+
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy).not.toHaveBeenCalledWith('claude', ['plugin', 'update', 'claude-mem@thedotmack']);
+    expect(result.updated).toEqual(['codex@openai-codex']);
+    expect(result.skipped).toEqual([
+      { item: 'claude-mem@thedotmack', reason: 'managed by mcp-components' }
+    ]);
+  });
+
   it('parses JSON plugin inventory for a reproducible lock', () => {
     expect(parsePluginListJson(JSON.stringify([
       { id: 'claude-mem@thedotmack', version: '13.10.2', scope: 'user', enabled: true }

@@ -13,6 +13,9 @@
 - **Provenance recovery**: the read-only evidence chain that maps an untracked installed Skill to a confirmed repository and path through a verified catalog, embedded Git remote, explicit metadata, NOTICE, or README plus official-tree comparison.
 - **Installed snapshot**: the normalized map of relative file paths to Git blob SHA values for one physical Skill, excluding only runtime artifacts.
 - **Upstream tree identity**: the Git tree SHA referenced by an upstream commit's `commit.tree.sha`; it is distinct from the commit SHA and is the only identity compared with a cloned repository's `HEAD^{tree}` during recovered updates.
+- **MCP component**: a versioned local executable or plugin that provides an MCP server; remote HTTP servers and binaries bundled with a host application are owner-managed MCP surfaces, not locally updateable components.
+- **MCP ownership**: the update route that controls a configured MCP server: Claude plugin, versioned npm bridge, Bun global package, host application/plugin, remote service, or unmanaged local command.
+- **MCP risk skip**: an available MCP component update that Freshkeeper reports but intentionally does not execute because backup, migration, live protocol verification, config switching, or rollback is not yet deterministic.
 - **Clean-old Skill**: an installed snapshot that matches a historical upstream tree and therefore has a proven three-way update base.
 - **Current subset**: an installation whose files all match current upstream but which lacks upstream resources that can be added without overwriting local work.
 - **Manual merge**: a recovered source where local and upstream content both differ and no clean historical base proves a safe automatic update.
@@ -35,3 +38,6 @@
 10. Recovered provenance remains evidence, not authority: it is never written into the global lock without explicit confirmation.
 11. A recovered-source update crosses the mutation seam only after backup, installed-snapshot, upstream-tree, and historical-base verification; a partial failure restores the affected Skill.
 12. A recovered update plan stores the upstream commit's Git tree SHA, not the commit SHA; the executor revalidates that value against the cloned repository's `HEAD^{tree}` before applying any file action.
+13. MCP discovery is ownership-aware: remote HTTP servers and host/plugin-bundled servers are report-only and are never overwritten as local packages.
+14. `claude-mem` crosses the MCP mutation seam only through the Claude plugin manager followed by installed-version verification, worker restart, and MCP connection inspection.
+15. `mcp-remote` and `gbrain` updates remain explicit risk skips until their staged install or data-migration flows have deterministic verification and rollback.

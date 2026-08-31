@@ -18,7 +18,13 @@ export interface UpdateInfo {
 export interface UpdateResult {
   updated: string[];
   failed: Array<{ item: string; error: string }>;
+  skipped?: Array<{ item: string; reason: string }>;
+  warnings?: string[];
   logs: string;
+}
+
+export interface UpdateContext {
+  enabledAdapterIds: string[];
 }
 
 export interface Adapter {
@@ -26,7 +32,7 @@ export interface Adapter {
   displayName: string;
   detect(): Promise<DetectResult>;
   check(): Promise<UpdateInfo[]>;
-  update(): Promise<UpdateResult>;
+  update(context?: UpdateContext): Promise<UpdateResult>;
   captureLock?(context: LockContext): Promise<AdapterLockState>;
   restoreLock?(lock: AdapterLockState, context: LockContext): Promise<UpdateResult>;
 }
