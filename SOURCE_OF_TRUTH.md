@@ -1,6 +1,6 @@
 # Freshkeeper Source of Truth
 
-Status: canonical path migration complete; Freshkeeper v1.3.0 was released and live-verified on 2026-08-31, and the component-scoped Codex/Plugin/MCP update work is staged as the v1.4.0 release candidate.
+Status: canonical path migration complete; Freshkeeper v1.4.0 is published, and a Codex standalone-vs-npm ownership fix is staged as the v1.4.1 patch candidate.
 
 ## Authority map
 
@@ -36,7 +36,7 @@ Verified on 2026-08-31:
 
 Verified on 2026-09-01:
 
-- Unreleased changes after v1.3.0 replace the false Codex update route (`claude plugin update codex@openai-codex`) with a version-pinned `@openai/codex` npm update and exact post-update verification.
+- Codex updates resolve the target version from npm, call the PATH-effective CLI's own `codex update`, and verify the final active version. This preserves standalone-vs-npm ownership and avoids installing a newer npm copy behind an older standalone binary earlier on PATH.
 - `freshkeeper init` now asks for one primary agent (or accepts `--agent`), writes that agent’s adapter plan, and passes the selection through the list/check/update seam so MCP ownership follows the user instead of whichever plugin happens to be discovered first. With no config, the unreleased default enables no adapters and therefore fails closed.
 - claude-mem inference is a separate user choice (`--memory-provider`); Codex-owned updates pass that provider to the official installer instead of inferring it from the primary agent.
 - Provider selection copy distinguishes subscription OAuth plan usage from separately credentialed and potentially separately billed API providers.

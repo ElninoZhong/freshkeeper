@@ -1,10 +1,10 @@
 {
   "name": "freshkeeper",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "OpenClaw, Hermes, Claude Code, and Codex users' unified update keeper.",
   "type": "module",
   "bin": {
-    "freshkeeper": "./bin/freshkeeper.js"
+    "freshkeeper": "bin/freshkeeper.js"
   },
   "files": [
     "bin",
@@ -50,7 +50,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ElninoZhong/freshkeeper.git"
+    "url": "git+https://github.com/ElninoZhong/freshkeeper.git"
   },
   "homepage": "https://github.com/ElninoZhong/freshkeeper"
 }

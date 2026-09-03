@@ -27,7 +27,7 @@ describe('codex adapter', () => {
       if (cmd === 'npm' && args[0] === 'view') {
         return { ok: true, stdout: '"0.146.1"', stderr: '' };
       }
-      if (cmd === 'npm' && args[0] === 'install') {
+      if (cmd === 'codex' && args[0] === 'update') {
         installedVersion = '0.146.1';
         return { ok: true, stdout: 'updated codex', stderr: '' };
       }
@@ -43,16 +43,8 @@ describe('codex adapter', () => {
       latestVersion: '0.146.1',
       source: 'npm:@openai/codex'
     }] });
-    expect(spy).toHaveBeenCalledWith('npm', [
-      'install',
-      '--global',
-      '@openai/codex@0.146.1',
-      '--registry',
-      'https://registry.npmjs.org/'
-    ], expect.objectContaining({
-      timeoutMs: 120_000,
-      env: expect.objectContaining({ npm_config_cache: expect.stringContaining('npm-cache') })
-    }));
+    expect(spy).toHaveBeenCalledWith('codex', ['update'], { timeoutMs: 300_000 });
+    expect(spy).not.toHaveBeenCalledWith('npm', expect.arrayContaining(['install']), expect.anything());
     expect(spy).not.toHaveBeenCalledWith('claude', expect.anything());
     expect(r.updated).toEqual(['codex@0.146.1']);
   });
@@ -70,7 +62,7 @@ describe('codex adapter', () => {
 
     const result = await codexAdapter.update();
 
-    expect(spy).not.toHaveBeenCalledWith('npm', expect.arrayContaining(['install']), expect.anything());
+    expect(spy).not.toHaveBeenCalledWith('codex', ['update'], expect.anything());
     expect(result.updated).toEqual([]);
     expect(result.unchanged).toEqual(['codex@0.146.1']);
   });

@@ -58,7 +58,7 @@ npx skills add ElninoZhong/freshkeeper --skill freshkeeper-update -g -y
 | `claude-plugins` | Claude Code Plugins | 通过 `claude plugin install` 安装 | 每个插件用 `claude plugin update <name>` 更新 |
 | `codex-plugins` | Codex Plugins | Codex Plugin marketplace | 刷新用户管理的 Git marketplace，并通过幂等 `codex plugin add` 更新或修复已安装 Plugin；宿主管理的 Plugin 只报告，MCP Plugin 交给 MCP adapter |
 | `skills-cli` | Skills CLI (`skills.sh`) | `npm i -g skills` 或固定版本的 `npx` 回退 | 只刷新有效 `skills-lock.json` 中列出的 GitHub skill；lock 缺失或损坏时 fail closed |
-| `codex` | OpenAI Codex CLI | npm 包 `@openai/codex` | 安装 npm 上解析到的精确最新版本，并复核 `codex --version` |
+| `codex` | OpenAI Codex CLI | standalone 或 npm 安装 | 解析 npm 精确最新版本，调用当前 PATH 生效 CLI 的 `codex update`，并复核最终 `codex --version` |
 | `openclaw` | OpenClaw | `npm install -g openclaw@latest` | `openclaw update --channel stable` + `openclaw skills update` |
 | `hermes` | Hermes Agent | `curl` 安装脚本 | `hermes update` + `hermes skills update` |
 

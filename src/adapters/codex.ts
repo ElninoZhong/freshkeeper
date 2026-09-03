@@ -60,7 +60,7 @@ export const codexAdapter: Adapter = {
 
   async detect() {
     const version = await installedVersion();
-    return version ? { installed: true, version, installMethod: 'npm:@openai/codex' } : { installed: false };
+    return version ? { installed: true, version, installMethod: 'codex-self-update' } : { installed: false };
   },
 
   async check() {
@@ -87,20 +87,11 @@ export const codexAdapter: Adapter = {
     }
     const target = plan.updates[0]!.latestVersion;
 
-    const mutation = await safeExec('npm', [
-      'install',
-      '--global',
-      `@openai/codex@${target}`,
-      '--registry',
-      NPM_REGISTRY
-    ], {
-      timeoutMs: 120_000,
-      env: { ...process.env, npm_config_cache: `${freshkeeperHome()}/npm-cache` }
-    });
+    const mutation = await safeExec('codex', ['update'], { timeoutMs: 300_000 });
     if (!mutation.ok) {
       return {
         updated: [],
-        failed: [{ item: 'codex', error: mutation.stderr || mutation.error || 'npm global update failed' }],
+        failed: [{ item: 'codex', error: mutation.stderr || mutation.error || 'Codex self-update failed' }],
         logs: mutation.stdout
       };
     }

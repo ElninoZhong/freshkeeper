@@ -53,7 +53,7 @@ These Agent Skills manage the user's installed Skill libraries, not the Freshkee
 | `claude-plugins` | Claude Code Plugins | via `claude plugin install` | each plugin via `claude plugin update <name>` |
 | `codex-plugins` | Codex Plugins | Codex plugin marketplaces | Refresh user-managed Git marketplaces and update or repair installed plugins through idempotent `codex plugin add`; host-managed plugins are report-only and MCP plugins stay delegated to the MCP adapter |
 | `skills-cli` | Skills CLI (`skills.sh`) | `npm i -g skills` or pinned `npx` fallback | Refresh GitHub skills listed by a valid `skills-lock.json`; missing or malformed locks fail closed |
-| `codex` | OpenAI Codex CLI | npm package `@openai/codex` | installs the exact latest npm version and verifies `codex --version` |
+| `codex` | OpenAI Codex CLI | standalone or npm installation | resolves the exact latest npm version, runs the active CLI's own `codex update`, and verifies the PATH-effective `codex --version` |
 | `openclaw` | OpenClaw | `npm install -g openclaw@latest` | `openclaw update --channel stable` + `openclaw skills update` |
 | `hermes` | Hermes Agent | `curl` install script | `hermes update` + `hermes skills update` |
 
