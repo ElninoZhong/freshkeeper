@@ -1,6 +1,6 @@
 # Freshkeeper Source of Truth
 
-Status: canonical path migration complete; Freshkeeper v1.4.0 is published, and a Codex standalone-vs-npm ownership fix is staged as the v1.4.1 patch candidate.
+Status: canonical path migration complete; Freshkeeper v1.4.1 was released and live-verified on 2026-09-03.
 
 ## Authority map
 
@@ -25,31 +25,31 @@ Status: canonical path migration complete; Freshkeeper v1.4.0 is published, and 
 
 ## Current published state
 
-Verified on 2026-08-31:
+Verified on 2026-09-03:
 
-- `package.json`, Git tag `v1.3.0`, the non-draft GitHub Release, and npm `latest` all identify version `1.3.0`.
-- Tag `v1.3.0` points to release commit `fa97ea031d1b538e66cbfe99702c5a9138e01da8`.
-- The GitHub Release workflow completed successfully and published both the [v1.3.0 Release](https://github.com/ElninoZhong/freshkeeper/releases/tag/v1.3.0) and npm package.
-- npm exposes an SLSA provenance attestation for `freshkeeper@1.3.0`; the downloaded official tarball contains the ownership-aware MCP adapter and its update policies.
+- `package.json`, Git tag `v1.4.1`, the non-draft GitHub Release, and npm `latest` all identify version `1.4.1`.
+- Tag `v1.4.1` points to patch release commit `0b9badb0acfc9cadb7eda95bdad805a9cdbe5e8c`; v1.4.0 feature commit `68b7ffd663192c5aeee471a7120ebcd6cf1187e8` remains separately tagged.
+- The GitHub Release workflow completed successfully and published the [v1.4.1 Release](https://github.com/ElninoZhong/freshkeeper/releases/tag/v1.4.1) and npm package.
+- npm `latest`, the executable `freshkeeper` bin, SLSA provenance, integrity metadata, downloaded official tarball, and a clean-directory `npx freshkeeper@1.4.1 --version` smoke test all passed.
 
 ## Current development state
 
-Verified on 2026-09-01:
+Verified on 2026-09-03:
 
 - Codex updates resolve the target version from npm, call the PATH-effective CLI's own `codex update`, and verify the final active version. This preserves standalone-vs-npm ownership and avoids installing a newer npm copy behind an older standalone binary earlier on PATH.
-- `freshkeeper init` now asks for one primary agent (or accepts `--agent`), writes that agent’s adapter plan, and passes the selection through the list/check/update seam so MCP ownership follows the user instead of whichever plugin happens to be discovered first. With no config, the unreleased default enables no adapters and therefore fails closed.
+- `freshkeeper init` asks for one primary agent (or accepts `--agent`), writes that agent’s adapter plan, and passes the selection through the list/check/update seam so MCP ownership follows the user instead of whichever plugin happens to be discovered first. With no config, the default enables no adapters and therefore fails closed.
 - claude-mem inference is a separate user choice (`--memory-provider`); Codex-owned updates pass that provider to the official installer instead of inferring it from the primary agent.
 - Provider selection copy distinguishes subscription OAuth plan usage from separately credentialed and potentially separately billed API providers.
 - Before a Codex OAuth install is overwritten, Freshkeeper probes the target package's help contract and skips the update unless that exact target advertises the `codex` provider.
 - A Codex-owned `claude-mem` installation is now discovered from `claude-mem@claude-mem-local`; updates run the official Codex CLI installer under `~/.codex/claude-mem-runtime`, use isolated npm/uv caches, verify the installed Codex plugin version, and perform an explicit stop/start with pinned `CLAUDE_CONFIG_DIR` and `CLAUDE_PLUGIN_ROOT` so the new worker cannot inherit a stale Claude-owned resolver environment.
-- The Claude plugin path remains supported for users who select Claude. On the maintainer machine, `~/.freshkeeper/config.json` explicitly selects Codex for both MCP ownership and memory generation and enables only `mcp-components`, `skills-cli`, and `codex`; this local preference is not a product-wide Codex default.
+- The Claude plugin path remains supported for users who select Claude. On the maintainer machine, `~/.freshkeeper/config.json` explicitly selects Codex for both MCP ownership and memory generation and enables `mcp-components`, `codex-plugins`, `skills-cli`, and `codex`; this local preference is not a product-wide Codex default.
 - The public Adapter seam is covered by synthetic command/registry tests; no test starts, updates, or rewrites a real MCP server.
-- Local lint, 88 tests, build, package dry run, and real read-only detection of the three installed versioned MCP components passed.
-- On 2026-09-01, a local claude-mem 13.21.2 build added a Codex provider that runs isolated `codex exec` calls against the existing ChatGPT OAuth login. It is installed under `~/.codex/claude-mem-runtime`, the hooks are enabled, worker health reports `provider=codex` and `authMethod=ChatGPT OAuth (Codex CLI)`, Chroma passes a deep probe, and an end-to-end synthetic session stored and searched observation `#2311`. The pre-cutover settings and both SQLite databases are backed up under `~/.claude-mem/backups/20260901T101507-codex-provider/`. `mcp-remote` and `gbrain` remain explicit risk skips.
+- Local lint, 99 tests, build, package dry run, main CI on Ubuntu/macOS with Node 20/22, and the release workflow passed for v1.4.1.
+- The local Codex-provider claude-mem build was rebased onto upstream 13.24.0 and installed under `~/.codex/claude-mem-runtime`. Worker health reports version 13.24.0, `provider=codex`, and `authMethod=ChatGPT OAuth (Codex CLI)`; the Chroma deep probe passed, and a synthetic session generated and searched observations `#2312` and `#2313`. The pre-upgrade runtime and settings are backed up under `~/.claude-mem/backups/20260903T154500-v1324-upgrade/`. `mcp-remote` and `gbrain` remain explicit risk skips.
 - The installed shared copies of `freshkeeper-check` and `freshkeeper-update` still match the repository Skill sources; the CLI adapter does not broaden either Skill's library-only scope.
-- Unreleased component-scoped commands accept `all`, `agent`, `plugins`, `skills`, or `mcp` and can only narrow the adapters already authorized by `enabledAdapters`.
-- Unreleased `codex-plugins` support refreshes user-managed Git marketplaces, rematerializes installed plugins through idempotent `codex plugin add`, verifies version/cache state, reports Codex/ChatGPT host-managed plugins, and delegates `claude-mem` to the MCP adapter.
-- Unreleased checks now return explicit complete, partial, or unavailable coverage. The CLI claims no pending updates only for complete coverage; partial or unavailable adapters remain visible as unknown instead of being collapsed into an empty update list.
+- Component-scoped commands accept `all`, `agent`, `plugins`, `skills`, or `mcp` and can only narrow the adapters already authorized by `enabledAdapters`.
+- `codex-plugins` support refreshes user-managed Git marketplaces, rematerializes installed plugins through idempotent `codex plugin add`, verifies version/cache state, reports Codex/ChatGPT host-managed plugins, and delegates `claude-mem` to the MCP adapter.
+- Checks return explicit complete, partial, or unavailable coverage. The CLI claims no pending updates only for complete coverage; partial or unavailable adapters remain visible as unknown instead of being collapsed into an empty update list.
 - Codex CLI and MCP adapters reuse their checked version plan during update. Update reporting separates verified state changes from already-current results; Claude plugins and agent CLIs compare post-update versions, while locked project Skills compare folder hashes.
 - Confirmed newer versions carry an update-or-skip disposition. MCP risk-skip reasons are shared by check and update so a known candidate cannot appear actionable before being skipped later.
 
