@@ -87,7 +87,11 @@ export const claudePluginsAdapter: Adapter = {
   },
 
   async check() {
-    return [];
+    return {
+      updates: [],
+      coverage: 'unavailable' as const,
+      note: 'Claude plugin manager exposes mutation commands but no reliable read-only latest-version query'
+    };
   },
 
   async update(context) {
@@ -96,6 +100,7 @@ export const claudePluginsAdapter: Adapter = {
 
     const plugins = parsePluginList(list.stdout);
     const updated: string[] = [];
+    const unchanged: string[] = [];
     const failed: Array<{ item: string; error: string }> = [];
     const skipped: Array<{ item: string; reason: string }> = [];
     const logs: string[] = [];
@@ -108,10 +113,30 @@ export const claudePluginsAdapter: Adapter = {
       }
       const r = await safeExec('claude', ['plugin', 'update', id]);
       logs.push(`[${id}] ${r.stdout.trim()}`);
-      if (r.ok) updated.push(id);
-      else failed.push({ item: id, error: r.stderr || 'update failed' });
+      if (!r.ok) failed.push({ item: id, error: r.stderr || 'update failed' });
     }
-    return { updated, failed, skipped, logs: logs.join('\n') };
+    const afterList = await safeExec('claude', ['plugin', 'list']);
+    if (!afterList.ok) {
+      failed.push({ item: 'plugin-list-post-update', error: afterList.stderr || 'post-update verification failed' });
+    } else {
+      const after = new Map(parsePluginList(afterList.stdout).map((plugin) => [
+        `${plugin.name}@${plugin.source}`,
+        plugin.version
+      ]));
+      for (const plugin of plugins) {
+        const id = `${plugin.name}@${plugin.source}`;
+        if (skipped.some((item) => item.item === id) || failed.some((item) => item.item === id)) continue;
+        const version = after.get(id);
+        if (!version) {
+          failed.push({ item: id, error: 'plugin missing after update command' });
+        } else if (version !== plugin.version) {
+          updated.push(`${id}@${version}`);
+        } else {
+          unchanged.push(`${id}@${version}`);
+        }
+      }
+    }
+    return { updated, unchanged, failed, skipped, logs: logs.join('\n') };
   },
 
   async captureLock(context) {

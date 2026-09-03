@@ -21,20 +21,23 @@ describe('hermes adapter', () => {
 
   it('update runs both CLI update and skills update', async () => {
     const spy = vi.spyOn(exec, 'safeExec')
+      .mockResolvedValueOnce({ ok: true, stdout: 'hermes 0.4.1', stderr: '' })
       .mockResolvedValueOnce({ ok: true, stdout: 'hermes updated', stderr: '' })
-      .mockResolvedValueOnce({ ok: true, stdout: '5 skills updated', stderr: '' });
+      .mockResolvedValueOnce({ ok: true, stdout: 'hermes 0.5.0', stderr: '' })
+      .mockResolvedValueOnce({ ok: true, stdout: 'Updated 5 skills', stderr: '' });
     const r = await hermesAdapter.update();
-    expect(spy).toHaveBeenNthCalledWith(1, 'hermes', ['update']);
-    expect(spy).toHaveBeenNthCalledWith(2, 'hermes', ['skills', 'update']);
-    expect(r.updated).toEqual(['hermes-cli', 'hermes-skills']);
+    expect(spy).toHaveBeenNthCalledWith(2, 'hermes', ['update']);
+    expect(spy).toHaveBeenNthCalledWith(4, 'hermes', ['skills', 'update']);
+    expect(r.updated).toEqual(['hermes-cli@0.5.0', '5 hermes-skills']);
   });
 
   it('update reports CLI failure but still attempts skills update', async () => {
     vi.spyOn(exec, 'safeExec')
+      .mockResolvedValueOnce({ ok: true, stdout: 'hermes 0.4.1', stderr: '' })
       .mockResolvedValueOnce({ ok: false, stdout: '', stderr: 'git pull failed', error: undefined })
-      .mockResolvedValueOnce({ ok: true, stdout: 'skills ok', stderr: '' });
+      .mockResolvedValueOnce({ ok: true, stdout: 'Updated 1 skill', stderr: '' });
     const r = await hermesAdapter.update();
-    expect(r.updated).toEqual(['hermes-skills']);
+    expect(r.updated).toEqual(['1 hermes-skills']);
     expect(r.failed).toEqual([{ item: 'hermes-cli', error: 'git pull failed' }]);
   });
 });

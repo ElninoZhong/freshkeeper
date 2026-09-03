@@ -186,9 +186,15 @@ describe('skills-cli adapter', () => {
     const spy = vi.spyOn(exec, 'safeExec').mockImplementation(async (cmd, args) => {
       if (cmd === 'skills' && args.join(' ') === '--version') return { ok: true, stdout: '1.5.4', stderr: '' };
       if (cmd === 'skills' && args.join(' ') === 'add owner/demo-skill --skill demo-skill --agent universal -y') {
+        const skillDir = join(cwd, '.agents', 'skills', 'demo-skill');
+        mkdirSync(skillDir, { recursive: true });
+        writeFileSync(join(skillDir, 'SKILL.md'), '# demo updated\n');
         return { ok: true, stdout: 'Installed demo-skill', stderr: '' };
       }
       if (cmd === 'skills' && args.join(' ') === 'add owner/modern-skill --skill modern-skill --agent universal -y') {
+        const skillDir = join(cwd, '.agents', 'skills', 'modern-skill');
+        mkdirSync(skillDir, { recursive: true });
+        writeFileSync(join(skillDir, 'SKILL.md'), '# modern updated\n');
         return { ok: true, stdout: 'Installed modern-skill', stderr: '' };
       }
       return { ok: false, stdout: '', stderr: '', error: `unexpected ${cmd} ${args.join(' ')}` };
@@ -206,7 +212,7 @@ describe('skills-cli adapter', () => {
       ['add', 'owner/modern-skill', '--skill', 'modern-skill', '--agent', 'universal', '-y'],
       expect.any(Object)
     );
-    expect(r.updated).toContain('2 skills');
+    expect(r.updated).toEqual(['demo-skill', 'modern-skill']);
     expect(r.failed).toHaveLength(0);
     expect(r.logs).toContain('Refreshing 2 project skill');
   });

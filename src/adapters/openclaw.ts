@@ -13,18 +13,26 @@ export const openClawAdapter: Adapter = {
   },
 
   async check() {
-    return [];
+    return {
+      updates: [],
+      coverage: 'unavailable' as const,
+      note: 'OpenClaw exposes mutating update commands without a reliable read-only plan'
+    };
   },
 
   async update() {
     const updated: string[] = [];
+    const unchanged: string[] = [];
     const failed: UpdateResult['failed'] = [];
     const logs: string[] = [];
 
+    const before = await openClawAdapter.detect();
     const cliResult = await safeExec('openclaw', ['update', '--channel', 'stable']);
     logs.push(cliResult.stdout);
     if (cliResult.ok) {
-      updated.push('openclaw-cli');
+      const after = await openClawAdapter.detect();
+      if (before.version && after.version && before.version !== after.version) updated.push(`openclaw-cli@${after.version}`);
+      else unchanged.push(`openclaw-cli@${after.version ?? before.version ?? 'current'}`);
     } else {
       failed.push({ item: 'openclaw-cli', error: cliResult.stderr || 'update failed' });
     }
@@ -32,13 +40,16 @@ export const openClawAdapter: Adapter = {
     const skillsResult = await safeExec('openclaw', ['skills', 'update']);
     logs.push(skillsResult.stdout);
     if (skillsResult.ok) {
-      updated.push('openclaw-skills');
+      const count = skillsResult.stdout.match(/Updated\s+(\d+)\s+skill/i)?.[1];
+      if (count && Number(count) > 0) updated.push(`${count} openclaw-skills`);
+      else unchanged.push('openclaw-skills');
     } else {
       failed.push({ item: 'openclaw-skills', error: skillsResult.stderr || 'update failed' });
     }
 
     return {
       updated,
+      unchanged,
       failed,
       logs: logs.filter(Boolean).join('\n')
     };

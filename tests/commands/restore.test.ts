@@ -22,7 +22,7 @@ describe('restore command', () => {
       id: 'claude-code',
       displayName: 'Claude Code',
       async detect() { return { installed: true, version: '2.1.115' }; },
-      async check() { return []; },
+      async check() { return { updates: [], coverage: 'complete' }; },
       async update() { throw new Error('normal update must not run'); },
       async captureLock() { return { adapter: 'claude-code', version: '2.1.115' }; },
       async restoreLock(lock) {

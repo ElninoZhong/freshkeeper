@@ -7,7 +7,7 @@ const makeAdapter = (id: string, installed: boolean, version?: string): Adapter 
   id,
   displayName: id,
   async detect() { return { installed, version }; },
-  async check() { return []; },
+  async check() { return { updates: [], coverage: 'complete' }; },
   async update() { return { updated: [], failed: [], logs: '' }; }
 });
 
@@ -18,8 +18,8 @@ describe('list command', () => {
     r.register(makeAdapter('b', false));
     const rows = await runList(r);
     expect(rows).toEqual([
-      { id: 'a', installed: true, version: '1.0' },
-      { id: 'b', installed: false, version: undefined }
+      { id: 'a', installed: true, version: '1.0', note: undefined },
+      { id: 'b', installed: false, version: undefined, note: undefined }
     ]);
   });
 });

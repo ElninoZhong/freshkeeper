@@ -21,26 +21,30 @@ describe('openclaw adapter', () => {
   it('update runs openclaw CLI and skills updates', async () => {
     const spy = vi
       .spyOn(exec, 'safeExec')
+      .mockResolvedValueOnce({ ok: true, stdout: 'openclaw 0.8.2', stderr: '' })
       .mockResolvedValueOnce({ ok: true, stdout: 'updated cli', stderr: '' })
-      .mockResolvedValueOnce({ ok: true, stdout: 'updated skills', stderr: '' });
+      .mockResolvedValueOnce({ ok: true, stdout: 'openclaw 0.9.0', stderr: '' })
+      .mockResolvedValueOnce({ ok: true, stdout: 'Updated 2 skills', stderr: '' });
 
     const r = await openClawAdapter.update();
 
-    expect(spy).toHaveBeenNthCalledWith(1, 'openclaw', ['update', '--channel', 'stable']);
-    expect(spy).toHaveBeenNthCalledWith(2, 'openclaw', ['skills', 'update']);
-    expect(r.updated).toEqual(['openclaw-cli', 'openclaw-skills']);
+    expect(spy).toHaveBeenNthCalledWith(2, 'openclaw', ['update', '--channel', 'stable']);
+    expect(spy).toHaveBeenNthCalledWith(4, 'openclaw', ['skills', 'update']);
+    expect(r.updated).toEqual(['openclaw-cli@0.9.0', '2 openclaw-skills']);
     expect(r.failed).toEqual([]);
   });
 
   it('update reports skills failure separately', async () => {
     vi
       .spyOn(exec, 'safeExec')
+      .mockResolvedValueOnce({ ok: true, stdout: 'openclaw 0.8.2', stderr: '' })
       .mockResolvedValueOnce({ ok: true, stdout: 'updated cli', stderr: '' })
+      .mockResolvedValueOnce({ ok: true, stdout: 'openclaw 0.9.0', stderr: '' })
       .mockResolvedValueOnce({ ok: false, stdout: '', stderr: 'network error' });
 
     const r = await openClawAdapter.update();
 
-    expect(r.updated).toEqual(['openclaw-cli']);
+    expect(r.updated).toEqual(['openclaw-cli@0.9.0']);
     expect(r.failed).toEqual([{ item: 'openclaw-skills', error: 'network error' }]);
   });
 });

@@ -14,7 +14,7 @@ describe('lock command', () => {
       id: 'claude-code',
       displayName: 'Claude Code',
       async detect() { return { installed: true, version: '2.1.116' }; },
-      async check() { return []; },
+      async check() { return { updates: [], coverage: 'complete' }; },
       async update() { return { updated: [], failed: [], logs: '' }; },
       async captureLock() { return { adapter: 'claude-code', version: '2.1.116' }; },
       async restoreLock() { return { updated: [], failed: [], logs: '' }; }

@@ -1,6 +1,7 @@
 import { claudeCodeAdapter } from './claude-code.js';
 import { claudePluginsAdapter } from './claude-plugins.js';
 import { codexAdapter } from './codex.js';
+import { codexPluginsAdapter } from './codex-plugins.js';
 import { hermesAdapter } from './hermes.js';
 import { mcpComponentsAdapter } from './mcp-components.js';
 import { openClawAdapter } from './openclaw.js';
@@ -12,6 +13,7 @@ const knownAdapters: Adapter[] = [
   mcpComponentsAdapter,
   claudeCodeAdapter,
   claudePluginsAdapter,
+  codexPluginsAdapter,
   skillsCliAdapter,
   codexAdapter,
   openClawAdapter,

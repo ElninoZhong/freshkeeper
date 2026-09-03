@@ -34,24 +34,27 @@ describe('claude-plugins adapter', () => {
     const spy = vi.spyOn(exec, 'safeExec')
       .mockResolvedValueOnce({ ok: true, stdout: fixture, stderr: '' })
       .mockResolvedValueOnce({ ok: true, stdout: 'updated claude-mem', stderr: '' })
-      .mockResolvedValueOnce({ ok: true, stdout: 'already latest codex', stderr: '' });
+      .mockResolvedValueOnce({ ok: true, stdout: 'already latest codex', stderr: '' })
+      .mockResolvedValueOnce({ ok: true, stdout: fixture.replace('12.1.5', '12.1.6'), stderr: '' });
     const r = await claudePluginsAdapter.update();
-    expect(spy).toHaveBeenCalledTimes(3);
-    expect(r.updated).toEqual(['claude-mem@thedotmack', 'codex@openai-codex']);
+    expect(spy).toHaveBeenCalledTimes(4);
+    expect(r.updated).toEqual(['claude-mem@thedotmack@12.1.6']);
+    expect(r.unchanged).toEqual(['codex@openai-codex@1.0.4']);
   });
 
   it('delegates claude-mem to the MCP adapter when that adapter is enabled', async () => {
     const spy = vi.spyOn(exec, 'safeExec')
       .mockResolvedValueOnce({ ok: true, stdout: fixture, stderr: '' })
-      .mockResolvedValueOnce({ ok: true, stdout: 'updated codex', stderr: '' });
+      .mockResolvedValueOnce({ ok: true, stdout: 'updated codex', stderr: '' })
+      .mockResolvedValueOnce({ ok: true, stdout: fixture.replace('1.0.4', '1.0.5'), stderr: '' });
 
     const result = await claudePluginsAdapter.update({
       enabledAdapterIds: ['mcp-components', 'claude-plugins']
     });
 
-    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy).toHaveBeenCalledTimes(3);
     expect(spy).not.toHaveBeenCalledWith('claude', ['plugin', 'update', 'claude-mem@thedotmack']);
-    expect(result.updated).toEqual(['codex@openai-codex']);
+    expect(result.updated).toEqual(['codex@openai-codex@1.0.5']);
     expect(result.skipped).toEqual([
       { item: 'claude-mem@thedotmack', reason: 'managed by mcp-components' }
     ]);

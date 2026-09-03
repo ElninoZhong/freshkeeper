@@ -12,6 +12,11 @@ describe('adapter catalog', () => {
     expect(registry.list().map((adapter) => adapter.id)).toEqual(['mcp-components']);
   });
 
+  it('exposes Codex plugins as an independently selectable adapter', () => {
+    const registry = buildRegistry(['codex-plugins']);
+    expect(registry.list().map((adapter) => adapter.id)).toEqual(['codex-plugins']);
+  });
+
   it('rejects unknown adapter ids instead of silently ignoring configuration mistakes', () => {
     expect(() => buildRegistry(['claude-code', 'missing-adapter'])).toThrow(/unknown adapter/i);
   });

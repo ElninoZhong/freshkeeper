@@ -6,7 +6,7 @@ const fakeAdapter: Adapter = {
   id: 'fake',
   displayName: 'Fake Tool',
   async detect() { return { installed: true, version: '1.0.0' }; },
-  async check() { return []; },
+  async check() { return { updates: [], coverage: 'complete' }; },
   async update() { return { updated: [], failed: [], logs: '' }; }
 };
 

@@ -382,7 +382,11 @@ export const skillsCliAdapter: Adapter = {
   },
 
   async check() {
-    return [];
+    return {
+      updates: [],
+      coverage: 'unavailable' as const,
+      note: 'the Skills CLI refresh path is mutating; use the freshkeeper-check Skill for source-aware library preflight'
+    };
   },
 
   async update() {
@@ -410,7 +414,13 @@ export const skillsCliAdapter: Adapter = {
 
     if (plan.kind === 'project') {
       const failed: { item: string; error: string }[] = [];
-      let refreshed = 0;
+      const updated: string[] = [];
+      const unchanged: string[] = [];
+      const beforeHashes = new Map<string, string | undefined>();
+      for (const skill of plan.skills) {
+        const skillDir = join(plan.cwd, '.agents', 'skills', skill.name);
+        beforeHashes.set(skill.name, existsSync(skillDir) ? computeSkillFolderHash(skillDir) : undefined);
+      }
       let logs = `Refreshing ${plan.skills.length} project skill(s) from skills-lock.json...\n`;
 
       for (const skill of plan.skills) {
@@ -422,7 +432,14 @@ export const skillsCliAdapter: Adapter = {
 
         logs += `\n[skill:${skill.name}]\n${refresh.stdout}${refresh.stderr ? `\n${refresh.stderr}` : ''}\n`;
         if (refresh.ok) {
-          refreshed += 1;
+          const skillDir = join(plan.cwd, '.agents', 'skills', skill.name);
+          if (!existsSync(skillDir)) {
+            failed.push({ item: skill.name, error: 'skill missing after refresh' });
+            continue;
+          }
+          const afterHash = computeSkillFolderHash(skillDir);
+          if (beforeHashes.get(skill.name) !== afterHash) updated.push(skill.name);
+          else unchanged.push(skill.name);
         } else {
           failed.push({
             item: skill.name,
@@ -432,7 +449,8 @@ export const skillsCliAdapter: Adapter = {
       }
 
       return {
-        updated: refreshed > 0 ? [`${refreshed} skills`] : [],
+        updated,
+        unchanged,
         failed,
         logs
       };

@@ -13,13 +13,26 @@ export const claudeCodeAdapter: Adapter = {
   },
 
   async check() {
-    return [];
+    return {
+      updates: [],
+      coverage: 'unavailable' as const,
+      note: '`claude update` does not expose a non-mutating version preflight'
+    };
   },
 
   async update() {
+    const before = await claudeCodeAdapter.detect();
     const r = await safeExec('claude', ['update']);
+    const after = r.ok ? await claudeCodeAdapter.detect() : { installed: false };
+    const changed = Boolean(
+      r.ok
+      && before.version
+      && after.version
+      && before.version !== after.version
+    );
     return {
-      updated: r.ok ? ['claude-code'] : [],
+      updated: changed ? [`claude-code@${after.version}`] : [],
+      unchanged: r.ok && !changed ? [`claude-code@${after.version ?? before.version ?? 'current'}`] : [],
       failed: r.ok ? [] : [{ item: 'claude-code', error: r.stderr || r.error || 'unknown' }],
       logs: r.stdout + (r.stderr ? `\n${r.stderr}` : '')
     };

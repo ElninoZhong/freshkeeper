@@ -36,7 +36,7 @@ const mkAdapter = (
 ): Adapter => ({
   id, displayName: id,
   async detect() { return { installed: true }; },
-  async check() { return []; },
+  async check() { return { updates: [], coverage: 'complete' }; },
   async update() { return { updated, failed, skipped, warnings, logs: `log-of-${id}` }; }
 });
 
@@ -50,24 +50,30 @@ describe('update command', () => {
     expect(report.perAdapter).toHaveLength(2);
   });
 
-  it('passes enabled adapter ownership context through the update seam', async () => {
+  it('passes the user-selected primary agent through the update seam', async () => {
     const r = new Registry();
     let enabledAdapterIds: string[] | undefined;
+    let primaryAgent: string | null | undefined;
+    let memoryProvider: string | null | undefined;
     r.register({
       id: 'mcp-components',
       displayName: 'MCP Components',
       async detect() { return { installed: true }; },
-      async check() { return []; },
+      async check() { return { updates: [], coverage: 'complete' }; },
       async update(context) {
         enabledAdapterIds = context?.enabledAdapterIds;
+        primaryAgent = context?.primaryAgent;
+        memoryProvider = context?.memoryProvider;
         return { updated: [], failed: [], logs: '' };
       }
     });
     r.register(mkAdapter('claude-plugins', []));
 
-    await runUpdate(r);
+    await runUpdate(r, { primaryAgent: 'codex', memoryProvider: 'codex' });
 
     expect(enabledAdapterIds).toEqual(['mcp-components', 'claude-plugins']);
+    expect(primaryAgent).toBe('codex');
+    expect(memoryProvider).toBe('codex');
   });
 
   it('captures failures without throwing', async () => {
@@ -75,6 +81,24 @@ describe('update command', () => {
     r.register(mkAdapter('a', [], [{ item: 'x', error: 'boom' }]));
     const report = await runUpdate(r);
     expect(report.totalFailed).toBe(1);
+  });
+
+  it('counts already-current results separately from actual updates', async () => {
+    const r = new Registry();
+    r.register({
+      id: 'current',
+      displayName: 'current',
+      async detect() { return { installed: true }; },
+      async check() { return { updates: [], coverage: 'complete' }; },
+      async update() {
+        return { updated: [], unchanged: ['current@1.0.0'], failed: [], logs: '' };
+      }
+    });
+
+    const report = await runUpdate(r);
+
+    expect(report.totalUpdated).toBe(0);
+    expect(report.totalUnchanged).toBe(1);
   });
 
   it('preserves explicit MCP skips and warnings without counting them as failures', async () => {
