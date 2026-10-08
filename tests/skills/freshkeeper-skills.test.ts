@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   existsSync,
@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync
@@ -381,5 +382,158 @@ describe('Freshkeeper installed-Skill library discovery', () => {
     expect(readFileSync(join(installed, 'SKILL.md'), 'utf8')).toContain('v2');
     expect(existsSync(join(installed, 'new.txt'))).toBe(true);
     expect(existsSync(join(installed, 'old.txt'))).toBe(false);
+  });
+});
+
+describe('Skill version comparison and explicit metadata fill', () => {
+  function wellKnownHome() {
+    const home = temporaryHome();
+    const skill = writeSkill(join(home, '.agents', 'skills'), 'official');
+    const content = readFileSync(join(skill, 'SKILL.md'), 'utf8');
+    const sourceUrl = 'https://vendor.example/.well-known/skills/official/SKILL.md';
+    const lockPath = join(home, '.agents', '.skill-lock.json');
+    writeJson(lockPath, { version: 3, skills: { official: { source: 'vendor.example', sourceType: 'well-known', sourceUrl, wellKnownDigest: 'preserve-installed-digest' } }, dismissed: ['preserve-me'] });
+    const fixture = join(home, 'fixture.json');
+    writeJson(fixture, { $wellKnown: { [sourceUrl]: { files: { 'SKILL.md': content } } } });
+    return { home, skill: realpathSync(skill), content, sourceUrl, lockPath, fixture };
+  }
+
+  it('compares official contents without inventing a semantic version or writing a lock', () => {
+    const c = wellKnownHome();
+    const before = readFileSync(c.lockPath, 'utf8');
+    const result = runJson(checkScript, ['--home', c.home, '--fixture', c.fixture, '--json']);
+    expect(result.items[0].status).toBe('exact-current');
+    expect(result.items[0].upstreamVersionKind).toBe('content-digest');
+    expect(result.items[0].upstreamVersion).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(readFileSync(c.lockPath, 'utf8')).toBe(before);
+    expect(result.metadata).toBeNull();
+  });
+
+  it('previews then atomically fills tracking, preserving install digests and unrelated metadata', () => {
+    const c = wellKnownHome();
+    const before = readFileSync(c.lockPath, 'utf8');
+    const args = ['--home', c.home, '--fixture', c.fixture, '--fill-metadata', '--json'];
+    expect(runJson(checkScript, args).metadata.mode).toBe('preview');
+    expect(readFileSync(c.lockPath, 'utf8')).toBe(before);
+    const applied = runJson(checkScript, [...args, '--apply-metadata']);
+    expect(applied.metadata.mode).toBe('applied');
+    expect(readFileSync(applied.metadata.backupPath, 'utf8')).toBe(before);
+    const lock = JSON.parse(readFileSync(c.lockPath, 'utf8'));
+    expect(lock.skills.official.wellKnownDigest).toBe('preserve-installed-digest');
+    expect(lock.dismissed).toEqual(['preserve-me']);
+    expect(lock.freshkeeperTracking[c.skill].sourceStatus).toBe('confirmed');
+    writeFileSync(join(c.skill, 'extra.md'), 'local extension');
+    const check = runJson(checkScript, ['--home', c.home, '--fixture', c.fixture, '--json']);
+    expect(check.items[0].status).toBe('local-extension');
+    expect(check.items[0].localDrift).toBe(true);
+    const again = runJson(checkScript, [...args, '--apply-metadata']);
+    const after = JSON.parse(readFileSync(c.lockPath, 'utf8'));
+    expect(after.freshkeeperTracking[c.skill].baselineSnapshotHash).toBe(lock.freshkeeperTracking[c.skill].baselineSnapshotHash);
+    expect(again.metadata.actions).toHaveLength(1);
+  });
+
+  it('reports upstream changes only when the entire local directory matches its installation digest', () => {
+    const c = wellKnownHome();
+    const hash = createHash('sha256').update('SKILL.md').update('\0').update(c.content).update('\0').digest('hex');
+    const lock = JSON.parse(readFileSync(c.lockPath, 'utf8'));
+    lock.skills.official.wellKnownDigest = `sha256:${hash}`;
+    writeJson(c.lockPath, lock);
+    writeJson(c.fixture, { $wellKnown: { [c.sourceUrl]: { files: { 'SKILL.md': c.content + '\nupstream change' } } } });
+    const args = ['--home', c.home, '--fixture', c.fixture, '--json'];
+    expect(runJson(checkScript, args).items[0].status).toBe('update-available');
+    writeFileSync(join(c.skill, 'SKILL.md'), c.content + '\nlocal patch');
+    expect(runJson(checkScript, args).items[0].status).toBe('manual-merge');
+  });
+
+  it('tracks unresolved Skills honestly and keeps same-name physical copies separate', () => {
+    const home = temporaryHome();
+    const one = writeSkill(join(home, '.codex', 'skills'), 'same');
+    const two = writeSkill(join(home, '.openclaw', 'skills'), 'same');
+    const fixture = join(home, 'fixture.json');
+    writeJson(fixture, {});
+    const result = runJson(checkScript, ['--home', home, '--fixture', fixture, '--fill-metadata', '--apply-metadata', '--json']);
+    const lock = JSON.parse(readFileSync(result.lockPath, 'utf8'));
+    expect(Object.keys(lock.freshkeeperTracking).sort()).toEqual([realpathSync(one), realpathSync(two)].sort());
+    expect(lock.freshkeeperTracking[realpathSync(one)].sourceStatus).toBe('unknown');
+    expect(lock.skills).toEqual({});
+  });
+
+  it('accepts evidenced local authorship without treating it as a public upstream version', () => {
+    const home = temporaryHome();
+    const skill = writeSkill(join(home, '.agents', 'skills'), 'personal');
+    const evidence = join(home, 'creation.txt');
+    writeFileSync(evidence, 'Created personal from local course notes.');
+    const sourceMap = join(home, 'source-map.json');
+    writeJson(sourceMap, { version: 1, sources: { personal: { sourceType: 'local', source: 'local-authoring', evidence: [evidence] } } });
+    const fixture = join(home, 'fixture.json');
+    writeJson(fixture, {});
+    const result = runJson(checkScript, ['--home', home, '--fixture', fixture, '--source-map', sourceMap, '--fill-metadata', '--apply-metadata', '--json']);
+    expect(result.items[0].status).toBe('local-tracked');
+    const check = runJson(checkScript, ['--home', home, '--fixture', fixture, '--json']);
+    expect(check.items[0].status).toBe('local-tracked');
+    expect(check.items[0].upstreamVersion).toBeUndefined();
+    expect(check.items[0].metadataTracked).toBe(true);
+    expect(check.items[0].realPath).toBe(realpathSync(skill));
+  });
+
+  it('fails closed on malformed locks and refuses apply without explicit fill mode', () => {
+    const c = wellKnownHome();
+    expect(() => runJson(checkScript, ['--home', c.home, '--fixture', c.fixture, '--apply-metadata', '--json'])).toThrow();
+    writeFileSync(c.lockPath, '{bad');
+    expect(() => runJson(checkScript, ['--home', c.home, '--fixture', c.fixture, '--fill-metadata', '--apply-metadata', '--json'])).toThrow();
+    expect(readFileSync(c.lockPath, 'utf8')).toBe('{bad');
+  });
+});
+
+
+describe('local-version preflight ordering', () => {
+  it('reads every local snapshot before the first upstream request', () => {
+    const home = temporaryHome();
+    const root = join(home, '.agents', 'skills');
+    const one = writeSkill(root, 'one');
+    const two = writeSkill(root, 'two');
+    writeFileSync(join(one, 'local.txt'), 'one');
+    writeFileSync(join(two, 'local.txt'), 'two');
+    writeJson(join(home, '.agents', '.skill-lock.json'), { version: 3, skills: {
+      one: { source: 'owner/repo', sourceType: 'github', skillPath: 'skills/one/SKILL.md', skillFolderHash: 'installed' },
+      two: { source: 'owner/repo', sourceType: 'github', skillPath: 'skills/two/SKILL.md', skillFolderHash: 'installed' }
+    } });
+    const marker = join(home, 'order.json');
+    const preload = join(home, 'preload.mjs');
+    writeFileSync(preload, `
+      import fs from 'node:fs';
+      import { syncBuiltinESMExports } from 'node:module';
+      const seen = new Set();
+      const read = fs.promises.readFile;
+      fs.promises.readFile = async function(path, ...args) {
+        if (process.env.TEST_FAIL_LOCAL && String(path).endsWith('/two/local.txt')) throw new Error('Synthetic local read denied');
+        const result = await read.call(this, path, ...args);
+        seen.add(String(path));
+        return result;
+      };
+      syncBuiltinESMExports();
+      globalThis.fetch = async () => {
+        fs.writeFileSync(process.env.TEST_ORDER_MARKER ?? ${JSON.stringify(marker)}, JSON.stringify([...seen]));
+        throw new Error('Synthetic upstream unavailable');
+      };
+    `);
+    const child = spawnSync(process.execPath, ['--import', preload, checkScript, '--home', home, '--json'], {
+      encoding: 'utf8', env: { ...process.env, GH_TOKEN: 'synthetic', GITHUB_TOKEN: 'synthetic' }
+    });
+    expect(child.status).toBe(1);
+    const seen: string[] = JSON.parse(readFileSync(marker, 'utf8'));
+    expect(seen).toContain(join(realpathSync(one), 'local.txt'));
+    expect(seen).toContain(join(realpathSync(two), 'local.txt'));
+    const result = JSON.parse(child.stdout);
+    expect(result.errors).toBe(2);
+    expect(result.items.every((item: any) => item.installedVersion.startsWith('sha256:'))).toBe(true);
+    const failureMarker = join(home, 'unexpected-upstream.json');
+    const failed = spawnSync(process.execPath, ['--import', preload, checkScript, '--home', home, '--json'], {
+      encoding: 'utf8', env: { ...process.env, GH_TOKEN: 'synthetic', GITHUB_TOKEN: 'synthetic',
+        TEST_FAIL_LOCAL: '1', TEST_ORDER_MARKER: failureMarker }
+    });
+    expect(failed.status).toBe(1);
+    expect(failed.stderr).toContain('Synthetic local read denied');
+    expect(existsSync(failureMarker)).toBe(false);
   });
 });

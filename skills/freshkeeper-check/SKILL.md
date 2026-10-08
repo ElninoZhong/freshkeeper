@@ -1,11 +1,12 @@
 ---
 name: freshkeeper-check
-description: Check every installed Skill without changing it, recover missing GitHub provenance from verified catalogs and local evidence, compare whole Skill directories, and use upstream history to distinguish current, clean-old, incomplete, locally extended, diverged, locally ahead, and legacy Skills. Use when the user invokes `$freshkeeper-check`, says `freshkeeper check`, asks whether installed Skills are current, or asks for `freshkeeper check with details`, source coverage, untracked Skills, update safety, library ownership, or a per-Skill status report. Prefer the shared library and fall back to supported AI tools' user-level libraries.
+description: Audit installed Skill versions, provenance and whole-directory drift; optionally fill missing version and
+  source tracking on explicit request. Use for update readiness or source coverage; prefer the shared library.
 ---
 
 # Freshkeeper Check
 
-Inspect the user's installed Skills. Do not check or update Claude Code, Codex, OpenClaw, Hermes, Freshkeeper itself, plugins, schedules, or project toolchain locks.
+Inspect the user's installed Skills. Ordinary checks are read-only. An explicit request to fill versions or source tracking authorizes metadata repair only. Do not check or update Claude Code, Codex, OpenClaw, Hermes, Freshkeeper itself, plugins, schedules, or project toolchain locks.
 
 ## Discover the installed libraries
 
@@ -38,11 +39,36 @@ The checker:
 
 1. Selects the shared library or agent-local fallback libraries.
 2. Inventories top-level directories containing `SKILL.md` and deduplicates symlink aliases by real path.
-3. Reads recorded sources from the global `.skill-lock.json`.
+3. Reads recorded sources from the global `.skill-lock.json` and completes the local version/whole-directory snapshot preflight for every selected Skill before making any upstream request. A local read failure stops the check.
 4. Recovers missing provenance from strong local evidence and the bundled verified catalog.
 5. Compares normalized Git blob snapshots of the whole Skill directory, ignoring only runtime artifacts such as `.git`, `__pycache__`, `.DS_Store`, and `*.pyc`.
-6. When current content differs, searches upstream history to prove whether the installed files match an older commit.
-7. Never writes to a Skill library, lock file, or provenance cache. Temporary Git data is removed before exit.
+6. When current content differs, searches upstream history to prove whether the installed files match an older commit. Revalidates the local snapshots before reporting or filling metadata; a local change during the check stops the run.
+7. In ordinary check mode, never writes to a Skill library, lock file, or provenance cache. Temporary Git data is removed before exit.
+
+For official `.well-known/skills` or `.well-known/agent-skills` file-list indexes, compare the whole directory and the install-time `wellKnownDigest`. Check errors remain visible; a failed request never means current. An index protocol version is not a Skill release version.
+
+## Fill missing version and source tracking
+
+Use this mode only when the user explicitly requests it. Preview first:
+
+```text
+node <skill-directory>/scripts/check-installed-skills.mjs --fill-metadata --json
+```
+
+Then apply the authorized metadata repair:
+
+```text
+node <skill-directory>/scripts/check-installed-skills.mjs --fill-metadata --apply-metadata --json
+```
+
+Use repeated `--skill <installed-name>` to limit the repair to named existing Skills. `--fill-metadata` without `--apply-metadata` never writes.
+
+- Record an actual frontmatter version when present, an evidenced Git revision when matched, or a SHA-256 content revision otherwise. Never invent a semantic version or assign the current upstream release to a different installed copy.
+- Keep installed content identity, the first tracking baseline, and observed upstream version separate. Do not replace the installation-time Git folder hash or `wellKnownDigest` with the latest upstream hash.
+- Store per-physical-path records in the global lock's `freshkeeperTracking` field; aliases share a record, separate copies retain separate records. Preserve other lock fields. Confirmed recovered GitHub sources can also become ordinary source entries without pretending their installed revision is known.
+- Before writing, revalidate the lock and installed snapshots, create and verify a recovery copy, then atomically replace only the metadata file. No Skill content is refreshed.
+- Report unknown origins honestly, even when a local content revision has been recorded. A tracked unknown origin is still a coverage gap.
+- For locally authored or application-bundled Skills, read [references/version-tracking.md](references/version-tracking.md) to supply an explicit evidence map. Personal evidence paths belong to runtime metadata, not the publishable catalog.
 
 ## Interpret results honestly
 
@@ -61,6 +87,8 @@ Use these meanings:
 - `untracked`: the Skill exists locally but has no source entry and source recovery found nothing reliable.
 - `uncheckable`: a source exists but lacks comparable version metadata.
 - `local-only`: the recorded source is local.
+- `local-tracked`: local authorship is evidenced and its content revision is tracked; there is no public upstream release to compare.
+- `bundled-current`: the directory matches its evidenced application-bundled source.
 - `missing-upstream`, `check-blocked`, or `check-failed`: report the problem; do not call the Skill current.
 
 Say “no updates confirmed among checkable Skills,” not “all Skills are current,” when any installed Skill is uncheckable.
@@ -69,7 +97,7 @@ Say “no updates confirmed among checkable Skills,” not “all Skills are cur
 
 - Never run `skills update`, `skills add`, `skills remove`, or any Freshkeeper update command.
 - Never modify, delete, reconcile, migrate, or prune any Skill library.
-- Never write recovered provenance into `.skill-lock.json`; report the evidence and confidence only.
+- Ordinary checks never write recovered provenance into `.skill-lock.json`. Explicit metadata-fill mode may write only evidenced sources and content tracking after backup and revalidation.
 - Keep GitHub comparison read-only.
 
 ## Invocation examples
@@ -77,3 +105,4 @@ Say “no updates confirmed among checkable Skills,” not “all Skills are cur
 - `$freshkeeper-check`
 - `$freshkeeper-check with details`
 - `检查我安装的所有 Skill 有没有更新，不要安装`
+- `补全缺失版本号和来源追踪，只补元数据，不更新 Skill 内容`

@@ -33,6 +33,8 @@ npx skills add ElninoZhong/freshkeeper --skill freshkeeper-update -g -y
 
 These Agent Skills manage the user's installed Skill libraries, not the Freshkeeper CLI or AI coding tool binaries. They prefer the shared Universal library and fall back to Claude Code, Codex, OpenClaw, and Hermes user-level libraries when no shared library exists. In v1.2, `$freshkeeper-check` can recover missing GitHub provenance from verified evidence, compare whole Skill directories, and search upstream history to distinguish clean old versions from local customizations. `$freshkeeper-update` backs up every selected library and automatically applies only proven clean-old or current-subset updates through a three-way safety check. Local extensions, manual merges, locally ahead Skills, and upstream-deleted legacy Skills are preserved and reported.
 
+In v1.5, `$freshkeeper-check` establishes all selected local versions and content snapshots before querying upstream. It compares official well-known file-list sources and supports explicit metadata repair: request “fill missing versions and source tracking” to preview, back up, and atomically record evidenced sources and content revisions without updating Skill contents. Ordinary checks remain read-only; declared versions, installed content hashes, and upstream revisions are reported separately.
+
 ## Commands
 | Command | What it does |
 |---|---|

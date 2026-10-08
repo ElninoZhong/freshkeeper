@@ -13,7 +13,8 @@
 - **Skills update plan**: the fail-closed decision that chooses a project-lock refresh, an explicitly opted-in global refresh, a safe skip, or an error.
 - **Project skill lock**: the nearest valid `skills-lock.json`, or the lock selected by `FRESHKEEPER_SKILLS_CWD`.
 - **Project toolchain lock**: the nearest valid `freshkeeper.lock.json`; it records exact adapter state that `restore` and `update --respect-lock` must verify before claiming success.
-- **Freshkeeper check Skill**: the repository-owned read-only inventory and upstream-comparison workflow that prefers the shared user library and falls back to supported agent-local libraries when needed.
+- **Freshkeeper check Skill**: the repository-owned inventory and upstream-comparison workflow that prefers the shared user library and falls back to supported agent-local libraries; ordinary checks are read-only, while explicit metadata-fill requests authorize backup-first source/version tracking without Skill content updates.
+- **Skill version tracking**: per-physical-path metadata recording the installed content identity, evidenced declared version or source, first local baseline, and separately observed upstream revision. Well-known sources compare official file lists and installation digests; local authorship has a content revision without a public release number.
 - **Freshkeeper update Skill**: the repository-owned backup-first workflow for updating recorded or evidence-recovered Skills in the selected shared or agent-local libraries while preserving local, untracked, symlinked, and upstream-deleted entries.
 - **Provenance recovery**: the read-only evidence chain that maps an untracked installed Skill to a confirmed repository and path through a verified catalog, embedded Git remote, explicit metadata, NOTICE, or README plus official-tree comparison.
 - **Installed snapshot**: the normalized map of relative file paths to Git blob SHA values for one physical Skill, excluding only runtime artifacts.
@@ -42,7 +43,7 @@
 6. A locked restore succeeds only after the observed post-restore state matches the declared version, commit, enabled state, and content hash that apply to that adapter.
 7. Locked project skills cross the mutation seam only after staging and verification; partial application restores the recovery copy and prior `skills-lock.json`.
 8. A project lock never authorizes pruning unrelated global plugins or mutating disabled adapters.
-9. The check Skill never mutates any Skill library; the update Skill never targets agent binaries, guesses missing sources, installs newly discovered Skills, deletes pre-existing Skills, or migrates agent-local libraries into a shared library.
+9. The check Skill never mutates Skill content; only an explicit metadata-fill request may atomically repair source/version metadata after verified backup and lock/snapshot revalidation. The update Skill never targets agent binaries, guesses missing sources, installs newly discovered Skills, deletes pre-existing Skills, or migrates agent-local libraries into a shared library.
 10. Recovered provenance remains evidence, not authority: it is never written into the global lock without explicit confirmation.
 11. A recovered-source update crosses the mutation seam only after backup, installed-snapshot, upstream-tree, and historical-base verification; a partial failure restores the affected Skill.
 12. A recovered update plan stores the upstream commit's Git tree SHA, not the commit SHA; the executor revalidates that value against the cloned repository's `HEAD^{tree}` before applying any file action.
@@ -61,3 +62,5 @@
 25. Empty update candidates from a partial or unavailable check mean unknown, not current; the CLI must surface that distinction.
 26. An update is counted only after a version or content hash changes and passes post-update verification; successful no-change commands are already current.
 27. A confirmed newer version that update policy will skip must be labeled as a skip, with the same reason, during check.
+
+28. The check Skill establishes every selected local declared version and content snapshot before any upstream query; unreadable or concurrently changed local files cannot be reported as current or used for metadata repair.

@@ -38,6 +38,8 @@ npx skills add ElninoZhong/freshkeeper --skill freshkeeper-update -g -y
 
 这两条 Agent Skill 管理的是用户已经安装的 Skill 库，不是 Freshkeeper CLI，也不是 AI coding 工具本体。它们优先使用 Universal 共享库；如果共享库不存在，就自动检查 Claude Code、Codex、OpenClaw 和 Hermes 各自的用户级 Skill 库。v1.2 起，`$freshkeeper-check` 会从已核验目录和本地证据恢复缺失的 GitHub 来源，比较整个 Skill 目录，并回溯上游历史，把干净旧版与本地定制区分开。`$freshkeeper-update` 会先完整备份，只自动处理能够证明安全的 clean-old 和 current-subset，通过三方校验更新。带本地扩展、需要合并、本地领先或已被上游删除的 Skill 都会保留并单独报告。
 
+v1.5 的 `$freshkeeper-check` 会先确认所有选中 Skill 的本地版本与目录指纹，再查询线上版本。支持官方 well-known 文件清单比较；明确要求“补全缺失版本号和来源追踪”时，可先预览、备份，再原子写入有依据的来源与内容版本。普通检查保持只读，已安装版本与线上版本分别记录，补全模式不更新 Skill 内容。
+
 ## 命令
 | 命令 | 作用 |
 |---|---|

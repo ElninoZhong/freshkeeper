@@ -34,6 +34,8 @@ Verified on 2026-09-03:
 
 ## Current development state
 
+v1.5.0 release candidate (2026-10-08; awaiting publication): the check Skill compares official well-known file-list sources and provides explicit `--fill-metadata` / `--apply-metadata` modes. The checker completes every selected local version and content snapshot before requesting any upstream version and rejects local changes during comparison. Ordinary checks remain read-only. Metadata repair preserves install-time hashes and unrelated lock fields, records content revisions and evidenced sources by physical path, and revalidates a verified backup, lock and installed snapshots before atomic replacement. Personal/local and application-bundled evidence maps stay in user runtime records. No Skill contents, binaries or schedules are updated by this mode.
+
 Verified on 2026-09-03:
 
 - Codex updates resolve the target version from npm, call the PATH-effective CLI's own `codex update`, and verify the final active version. This preserves standalone-vs-npm ownership and avoids installing a newer npm copy behind an older standalone binary earlier on PATH.

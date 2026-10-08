@@ -175,6 +175,33 @@
     {
       "source": "eze-is/web-access",
       "skills": { "web-access": "." }
+    },
+    {
+      "source": "dreambigou/eli5",
+      "skills": {
+        "eli5": "skills/eli5"
+      }
+    },
+    {
+      "source": "lewislulu/llm-wiki-skill",
+      "skills": {
+        "llm-wiki": "llm-wiki"
+      }
+    },
+    {
+      "source": "DingTalk-Real-AI/dingtalk-workspace-cli",
+      "skills": {
+        "dws": "skills/mono"
+      }
+    },
+    {
+      "source": "lc2panda/wps-skills",
+      "skills": {
+        "wps-excel": "skills/wps-excel",
+        "wps-word": "skills/wps-word",
+        "wps-ppt": "skills/wps-ppt",
+        "wps-office": "skills/wps-office"
+      }
     }
   ]
 }

@@ -6,6 +6,7 @@ import { homedir } from 'node:os';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { auditProvenance } from './provenance.mjs';
+import { applySourceEvidence, describeInstalled, fillMetadata, wellKnownChecker } from './version-tracking.mjs';
 
 const argv = process.argv.slice(2);
 
@@ -27,6 +28,12 @@ function option(name) {
 }
 
 const details = argv.includes('--details');
+const fill = argv.includes('--fill-metadata');
+const applyMetadata = argv.includes('--apply-metadata');
+if (applyMetadata && !fill) throw new Error('--apply-metadata requires --fill-metadata');
+const selectedNames = options('--skill');
+const sourceMapPath = option('--source-map');
+if (sourceMapPath && !fill) throw new Error('--source-map requires --fill-metadata');
 const json = argv.includes('--json');
 const requestedRoots = options('--root');
 const homeOverride = option('--home');
@@ -320,9 +327,22 @@ function baseItem(skill, entry) {
 }
 
 const resolved = await resolveLibraries();
-const inventory = await inventoryLibraries(resolved);
+const allInventory = await inventoryLibraries(resolved);
+const inventory = selectedNames.length ? allInventory.filter(skill => selectedNames.includes(skill.name)) : allInventory;
+for (const name of selectedNames) if (!inventory.some(skill => skill.name === name)) throw new Error(`Installed Skill not found: ${name}`);
 const lockPath = option('--lock') ?? defaultLockPath();
 const lock = await readLock(lockPath);
+const originalLock = await readFile(lockPath, 'utf8').catch(error => error.code === 'ENOENT' ? null : Promise.reject(error));
+const sourceMap = sourceMapPath ? JSON.parse(await readFile(sourceMapPath, 'utf8')) : null;
+if (sourceMap && (sourceMap.version !== 1 || !sourceMap.sources || typeof sourceMap.sources !== 'object')) throw new Error('Invalid source evidence map');
+if (lock.freshkeeperTracking && (typeof lock.freshkeeperTracking !== 'object' || Array.isArray(lock.freshkeeperTracking))) throw new Error('Invalid tracking metadata');
+if (originalLock !== null && JSON.stringify(lock) !== JSON.stringify(JSON.parse(originalLock))) throw new Error('Lock changed while reading');
+// Establish every local version before credentials, network requests, or upstream recovery.
+const localItems = new Map();
+for (const skill of inventory) {
+  const entry = lock.skills[skill.name] ?? lock.skills[skill.folder];
+  localItems.set(skill.realPath, await describeInstalled(baseItem(skill, entry), lock.freshkeeperTracking?.[skill.realPath]));
+}
 const fixture = fixturePath ? JSON.parse(await readFile(fixturePath, 'utf8')) : null;
 let token;
 const githubToken = () => {
@@ -347,6 +367,8 @@ for (const skill of inventory) {
   }
 }
 
+for (const promise of treePromises.values()) promise.catch(() => {});
+
 const provenanceTargets = inventory.filter((skill) => {
   const entry = lock.skills[skill.name] ?? lock.skills[skill.folder];
   return !entry || (entry.sourceType === 'github'
@@ -363,9 +385,10 @@ const recovered = provenanceTargets.length > 0
   : new Map();
 
 const items = [];
+const checkWellKnown = wellKnownChecker(fixture);
 for (const skill of inventory) {
   const entry = lock.skills[skill.name] ?? lock.skills[skill.folder];
-  const item = baseItem(skill, entry);
+  const item = { ...localItems.get(skill.realPath) };
   if (!entry) {
     const provenance = recovered.get(skill.realPath);
     if (provenance && provenance.status !== 'unresolved') {
@@ -381,6 +404,11 @@ for (const skill of inventory) {
   if (entry.sourceType === 'local') {
     item.status = 'local-only';
     item.reason = 'Local source has no remote version to compare';
+    items.push(item);
+    continue;
+  }
+  if (entry.sourceType === 'well-known') {
+    Object.assign(item, await checkWellKnown(skill, entry));
     items.push(item);
     continue;
   }
@@ -432,10 +460,24 @@ for (const skill of inventory) {
   items.push(item);
 }
 
-const installedNames = new Set(inventory.flatMap((skill) => [skill.name, skill.folder]));
+await applySourceEvidence(items, sourceMap?.sources, lock.freshkeeperTracking);
+for (const item of items) {
+  const before = localItems.get(item.realPath);
+  const after = await describeInstalled(item, lock.freshkeeperTracking?.[item.realPath]);
+  if (after.installedSnapshotHash !== before.installedSnapshotHash) {
+    throw new Error(`Local Skill changed during upstream comparison: ${item.name}; retry with a stable local version`);
+  }
+  // Keep the local preflight identity separate from recovered upstream fields.
+  item.installedSnapshotHash = before.installedSnapshotHash;
+  item.installedVersion = before.installedVersion;
+  item.installedDeclaredVersion = before.installedDeclaredVersion;
+}
+const metadata = fill ? await fillMetadata({ items, lock, lockPath, original: originalLock, apply: applyMetadata }) : null;
+
+const installedNames = new Set(allInventory.flatMap((skill) => [skill.name, skill.folder]));
 const staleLockEntries = Object.keys(lock.skills).filter((name) => !installedNames.has(name)).sort();
 const count = (status) => items.filter((item) => item.status === status).length;
-const currentStatuses = new Set(['current', 'exact-current', 'local-extension']);
+const currentStatuses = new Set(['current', 'exact-current', 'local-extension', 'bundled-current']);
 const updateStatuses = new Set(['update-available', 'clean-old', 'current-subset']);
 const checkableStatuses = new Set([
   ...currentStatuses,
@@ -463,11 +505,15 @@ const result = {
   updatesAvailable: items.filter((item) => updateStatuses.has(item.status)).length,
   manualMerge: count('manual-merge'),
   localAhead: count('local-ahead'),
+  localTracked: count('local-tracked'),
   legacyLocal: count('legacy-local'),
   unresolved: items.filter((item) => ['untracked', 'unresolved', 'uncheckable', 'local-only'].includes(item.status)).length,
   uncheckable: items.filter((item) => ['untracked', 'unresolved', 'uncheckable', 'local-only'].includes(item.status)).length,
   errors: count('check-failed') + count('missing-upstream') + count('check-blocked'),
   staleLockEntries,
+  metadataTracked: items.filter(item => item.metadataTracked).length,
+  localDrift: items.filter(item => item.localDrift).length,
+  metadata,
   items
 };
 
@@ -495,11 +541,14 @@ if (json) {
     for (const item of manual) console.log(`- ${item.name} (${item.source})`);
   }
   if (staleLockEntries.length) console.log(`Stale lock entries: ${staleLockEntries.join(', ')}`);
+  if (metadata) console.log(`Metadata ${metadata.mode}: ${metadata.actions.length} Skill(s); backup: ${metadata.backupPath ?? 'none (preview or new lock)'}`);
+  const errors = items.filter(item => ['check-failed', 'check-blocked', 'missing-upstream'].includes(item.status));
+  for (const item of errors) console.log(`Check error: ${item.name}: ${item.reason}`);
   if (details) {
     console.log();
-    console.log('Skill\tStatus\tAgents\tSource\tReason');
+    console.log('Skill\tStatus\tAgents\tSource\tInstalled version\tUpstream version\tReason');
     for (const item of items) {
-      console.log(`${item.name}\t${item.status}\t${item.agents.join(',')}\t${item.source ?? '-'}\t${item.reason}`);
+      console.log(`${item.name}\t${item.status}\t${item.agents.join(',')}\t${item.source ?? '-'}\t${item.installedDeclaredVersion ?? item.installedVersion}\t${item.upstreamVersion ?? '-'}\t${item.reason}`);
     }
   } else {
     console.log('Use `with details` to show every installed skill and its check status.');
