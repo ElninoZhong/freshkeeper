@@ -1,6 +1,6 @@
 # Freshkeeper Source of Truth
 
-Status: canonical path migration complete; Freshkeeper v1.4.1 was released and live-verified on 2026-09-03.
+Status: canonical path migration complete; Freshkeeper v1.5.0 was released and live-verified on 2026-10-08.
 
 ## Authority map
 
@@ -25,6 +25,17 @@ Status: canonical path migration complete; Freshkeeper v1.4.1 was released and l
 
 ## Current published state
 
+Verified on 2026-10-08:
+
+- `package.json`, `package-lock.json`, Git tag `v1.5.0`, the non-draft GitHub Release, and official npm `latest` identify version `1.5.0`.
+- Tag `v1.5.0` points to feature commit `1c900ce9e407c6373e22bc256c098503e1d5d741`.
+- [Main CI](https://github.com/ElninoZhong/freshkeeper/actions/runs/37739486956) passed on Ubuntu/macOS with Node 20/22; lint, 106 tests and build passed. Local package dry run and Skill validation passed.
+- The [release workflow](https://github.com/ElninoZhong/freshkeeper/actions/runs/37739576679) successfully published the [v1.5.0 Release](https://github.com/ElninoZhong/freshkeeper/releases/tag/v1.5.0) and npm package. npm initially reported processing; completion was claimed only after official `latest` became `1.5.0` and the package was downloadable.
+- The downloaded official package has SHA-1 `2cc8a4d62798e4480c8ccafae9aba20f6fc777e5`. Its SHA-512 integrity and npm SLSA provenance subject match the package; provenance identifies the exact `v1.5.0` source commit.
+- Every packaged Skill file matches the release tag. A temporary official npm execution returned CLI version `1.5.0`, without a global install or runtime update. The shared `freshkeeper-check` copy matches the canonical release source.
+
+## Previous published state
+
 Verified on 2026-09-03:
 
 - `package.json`, Git tag `v1.4.1`, the non-draft GitHub Release, and npm `latest` all identify version `1.4.1`.
@@ -34,7 +45,7 @@ Verified on 2026-09-03:
 
 ## Current development state
 
-v1.5.0 release candidate (2026-10-08; awaiting publication): the check Skill compares official well-known file-list sources and provides explicit `--fill-metadata` / `--apply-metadata` modes. The checker completes every selected local version and content snapshot before requesting any upstream version and rejects local changes during comparison. Ordinary checks remain read-only. Metadata repair preserves install-time hashes and unrelated lock fields, records content revisions and evidenced sources by physical path, and revalidates a verified backup, lock and installed snapshots before atomic replacement. Personal/local and application-bundled evidence maps stay in user runtime records. No Skill contents, binaries or schedules are updated by this mode.
+v1.5.0 behavior (released and verified on 2026-10-08): the check Skill compares official well-known file-list sources and provides explicit `--fill-metadata` / `--apply-metadata` modes. The checker completes every selected local version and content snapshot before requesting any upstream version and rejects local changes during comparison. Ordinary checks remain read-only. Metadata repair preserves install-time hashes and unrelated lock fields, records content revisions and evidenced sources by physical path, and revalidates a verified backup, lock and installed snapshots before atomic replacement. Personal/local and application-bundled evidence maps stay in user runtime records. No Skill contents, binaries or schedules are updated by this mode.
 
 Verified on 2026-09-03:
 
