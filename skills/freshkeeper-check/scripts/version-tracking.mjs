@@ -5,7 +5,10 @@ import { localSnapshot, snapshotDigest, gitBlobSha, compareSnapshots } from './p
 
 export function declaredVersion(markdown) {
   const frontmatter = markdown.match(/^---\s*\n([\s\S]*?)\n---/)?.[1];
-  return frontmatter?.match(/^version:\s*["']?([^\n"']+)["']?\s*$/m)?.[1]?.trim() ?? null;
+  const root = frontmatter?.match(/^version:\s*["']?([^\n"']+)["']?\s*$/m)?.[1]?.trim();
+  const metadata = frontmatter?.match(/^metadata:[ \t]*\n((?:[ \t]+[^\n]*(?:\n|$))+)/m)?.[1];
+  const nested = metadata?.match(/^  version:\s*["']?([^\n"']+)["']?\s*$/m)?.[1]?.trim();
+  return root ?? nested ?? null;
 }
 
 export function filesDigest(files) {
@@ -23,8 +26,9 @@ function safeFile(path) {
     && !/[?#]/.test(path);
 }
 
-async function request(url, json = false) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+async function request(url, json = false, deadline = Infinity) {
+  if (Date.now() >= deadline) throw new Error('Check time budget exceeded; retry this item only');
+  const response = await fetch(url, { signal: AbortSignal.timeout(Math.max(1, Math.min(20_000, deadline - Date.now()))) });
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
   const content = Buffer.from(await response.arrayBuffer());
   if (content.length > 20 * 1024 * 1024) throw new Error(`Oversized response: ${url}`);
@@ -43,7 +47,7 @@ async function pool(values, action, concurrency = 8) {
   return result;
 }
 
-export function wellKnownChecker(fixture = null) {
+export function wellKnownChecker(fixture = null, { deadline = Infinity } = {}) {
   const indexes = new Map();
   return async function check(skill, entry) {
     const local = await localSnapshot(skill.realPath);
@@ -64,7 +68,7 @@ export function wellKnownChecker(fixture = null) {
         files = new Map(Object.entries(record.files).map(([path, text]) => [path, Buffer.from(text)]));
         officialVersion = record.version ?? null;
       } else {
-        if (!indexes.has(indexUrl)) indexes.set(indexUrl, request(indexUrl, true));
+        if (!indexes.has(indexUrl)) indexes.set(indexUrl, request(indexUrl, true, deadline));
         const index = await indexes.get(indexUrl);
         const entries = index.skills?.filter(value => value.name === skill.name) ?? [];
         if (entries.length !== 1) throw new Error('Official index has no unique matching Skill');
@@ -75,7 +79,7 @@ export function wellKnownChecker(fixture = null) {
           || new Set(record.files).size !== record.files.length || !record.files.every(safeFile))
           throw new Error('Official index contains an unsafe or incomplete file list');
         officialVersion = typeof record.version === 'string' ? record.version : null;
-        const contents = await pool(record.files, async path => [path, await request(new URL(path, directoryUrl).href)]);
+        const contents = await pool(record.files, async path => [path, await request(new URL(path, directoryUrl).href, false, deadline)]);
         files = new Map(contents);
       }
       if (![...files.keys()].every(safeFile) || !files.has('SKILL.md')) throw new Error('Unsafe or incomplete upstream files');
@@ -142,12 +146,15 @@ export async function fillMetadata({ items, lock, lockPath, original, apply = fa
       upstreamDigest: item.upstreamDigest ?? null,
       baselineRecordedAt: old?.baselineRecordedAt ?? now, checkedAt: now };
     next.freshkeeperTracking[item.realPath] = record;
-    // Recovered Git sources become ordinary CLI-compatible entries only when the name has a single physical installation.
+    // Keep evidenced origins in per-path tracking. A CLI update entry also needs
+    // a proven installed Git baseline; an empty hash must not imply a safe update.
     if (item.sourceType === 'github-recovered' && item.confidence === 'confirmed'
+      && ['exact-current', 'clean-old'].includes(item.status)
+      && /^[0-9a-f]{40}$/i.test(item.installedGitFolderHash ?? '')
       && !next.skills[item.name] && items.filter(value => value.name === item.name).length === 1) {
       next.skills[item.name] = { source: item.source, sourceType: 'github',
         sourceUrl: `https://github.com/${item.source}`, skillPath: `${item.skillPath ? item.skillPath + '/' : ''}SKILL.md`,
-        skillFolderHash: '', provenanceRecordedAt: now };
+        skillFolderHash: item.installedGitFolderHash, provenanceRecordedAt: now };
     }
     actions.push({ name: item.name, realPath: item.realPath, sourceStatus: record.sourceStatus,
       installedVersion: item.installedVersion, upstreamVersion: record.upstreamVersion });
@@ -182,33 +189,42 @@ export async function fillMetadata({ items, lock, lockPath, original, apply = fa
 // Public Git provenance still goes through the official-tree audit.
 export async function applySourceEvidence(items, sourceMap, tracking = {}) {
   for (const item of items) {
-    if (item.sourceType) continue;
+    if (item.sourceType && item.sourceType !== 'local') continue;
     const candidate = sourceMap?.[item.name] ?? tracking[item.realPath];
     if (!candidate || !['local', 'bundled'].includes(candidate.sourceType)) continue;
-    if (!Array.isArray(candidate.evidence) || !candidate.evidence.length) throw new Error(`Missing source evidence: ${item.name}`);
-    for (const path of candidate.evidence) {
-      const content = await readFile(path, 'utf8');
-      if (!content.includes(item.name)) throw new Error(`Evidence does not identify ${item.name}: ${path}`);
-    }
-    item.source = candidate.source;
-    item.sourceType = candidate.sourceType;
-    item.sourcePath = candidate.sourcePath ?? null;
-    item.evidence = candidate.evidence;
-    item.confidence = 'confirmed';
-    if (candidate.sourceType === 'local') {
-      item.status = 'local-tracked';
-      item.reason = 'Local authorship is evidenced; track a content revision without inventing a public release version';
-    } else {
-      const remote = await localSnapshot(candidate.sourcePath);
-      if (!remote.has('SKILL.md')) throw new Error(`Bundled source has no SKILL.md: ${item.name}`);
-      const local = await localSnapshot(item.realPath);
-      const relation = compareSnapshots(local, remote);
-      item.status = relation.exact ? 'bundled-current' : 'manual-merge';
-      item.reason = relation.exact ? 'Installed directory matches the application-bundled Skill'
-        : 'Application-bundled Skill differs; preserve local modifications';
-      item.upstreamVersion = `sha256:${snapshotDigest(remote)}`;
-      item.upstreamVersionKind = 'content-digest';
-      item.versionEvidence = { sourcePath: candidate.sourcePath, fileCount: remote.size };
+    item.sourceEvidenceChecked = true;
+    try {
+      if (!Array.isArray(candidate.evidence) || !candidate.evidence.length) throw new Error(`Missing source evidence: ${item.name}`);
+      for (const path of candidate.evidence) {
+        const content = await readFile(path, 'utf8');
+        if (!content.includes(item.name)) throw new Error(`Evidence does not identify ${item.name}: ${path}`);
+      }
+      item.source = candidate.source;
+      item.sourceType = candidate.sourceType;
+      item.sourcePath = candidate.sourcePath ?? null;
+      item.evidence = candidate.evidence;
+      item.confidence = 'confirmed';
+      if (candidate.sourceType === 'local') {
+        item.status = 'local-tracked';
+        item.reason = 'Local authorship is evidenced; track its actual content revision';
+      } else {
+        const remote = await localSnapshot(candidate.sourcePath);
+        if (!remote.has('SKILL.md')) throw new Error(`Bundled source has no SKILL.md: ${item.name}`);
+        const local = await localSnapshot(item.realPath);
+        const relation = compareSnapshots(local, remote);
+        item.status = relation.exact ? 'bundled-current' : 'manual-merge';
+        item.reason = relation.exact ? 'Installed directory matches the application-bundled Skill'
+          : 'Application-bundled Skill differs; preserve local modifications';
+        item.upstreamVersion = `sha256:${snapshotDigest(remote)}`;
+        item.upstreamVersionKind = 'content-digest';
+        item.versionEvidence = { sourcePath: candidate.sourcePath, fileCount: remote.size };
+      }
+    } catch (error) {
+      item.status = 'check-blocked';
+      item.evidenceError = true;
+      item.reason = `Source evidence unavailable: ${error.message}`;
+      item.evidence = candidate.evidence ?? [];
+      item.confidence = 'unresolved';
     }
   }
 }

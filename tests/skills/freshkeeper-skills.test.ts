@@ -123,7 +123,10 @@ describe('Freshkeeper installed-Skill library discovery', () => {
     writeJson(fixture, {
       'owner/repo': {
         sha: 'repo-hash',
-        tree: [{ type: 'tree', path: 'skills/alpha', sha: 'new-hash' }]
+        tree: [
+          { type: 'tree', path: 'skills/alpha', sha: 'new-hash' },
+          { type: 'blob', path: 'skills/alpha/SKILL.md', sha: blobSha('upstream changed') }
+        ]
       }
     });
 
@@ -132,7 +135,9 @@ describe('Freshkeeper installed-Skill library discovery', () => {
 
     expect(result.libraryMode).toBe('agent-local');
     expect(result.totalInstalled).toBe(2);
-    expect(alpha.status).toBe('update-available');
+    expect(alpha.status).toBe('needs-review');
+    expect(result.mode).toBe('quick');
+    expect(result.actions.needsReview[0].name).toBe('alpha');
     expect(alpha.agents).toEqual(['claude-code', 'codex']);
     expect(result.items.find((item: any) => item.name === 'beta').agents).toEqual(['openclaw']);
   });
@@ -257,6 +262,7 @@ describe('Freshkeeper installed-Skill library discovery', () => {
       '--home', home,
       '--fixture', fixture,
       '--provenance-catalog', catalog,
+      '--history',
       '--json'
     ]);
     const status = Object.fromEntries(result.items.map((item: any) => [item.name, item.status]));
@@ -264,7 +270,7 @@ describe('Freshkeeper installed-Skill library discovery', () => {
     expect(status).toEqual({
       custom: 'manual-merge',
       exact: 'exact-current',
-      inspired: 'untracked',
+      inspired: 'unresolved',
       legacy: 'legacy-local',
       old: 'clean-old',
       subset: 'current-subset'
@@ -440,7 +446,10 @@ describe('Skill version comparison and explicit metadata fill', () => {
     writeJson(c.lockPath, lock);
     writeJson(c.fixture, { $wellKnown: { [c.sourceUrl]: { files: { 'SKILL.md': c.content + '\nupstream change' } } } });
     const args = ['--home', c.home, '--fixture', c.fixture, '--json'];
-    expect(runJson(checkScript, args).items[0].status).toBe('update-available');
+    const changed = runJson(checkScript, args);
+    expect(changed.items[0].status).toBe('update-available');
+    expect(changed.updatesAvailable).toBe(1);
+    expect(changed.actions.updateCandidates).toHaveLength(1);
     writeFileSync(join(c.skill, 'SKILL.md'), c.content + '\nlocal patch');
     expect(runJson(checkScript, args).items[0].status).toBe('manual-merge');
   });
@@ -533,7 +542,11 @@ describe('local-version preflight ordering', () => {
         TEST_FAIL_LOCAL: '1', TEST_ORDER_MARKER: failureMarker }
     });
     expect(failed.status).toBe(1);
-    expect(failed.stderr).toContain('Synthetic local read denied');
-    expect(existsSync(failureMarker)).toBe(false);
+    const partial = JSON.parse(failed.stdout);
+    expect(partial.items).toHaveLength(2);
+    expect(partial.items.find((item: any) => item.name === 'two').reason).toContain('Synthetic local read denied');
+    expect(partial.items.find((item: any) => item.name === 'two').status).toBe('check-failed');
+    expect(existsSync(failureMarker)).toBe(true);
+    expect(partial.actions.retry.some((item: any) => item.name === 'two')).toBe(true);
   });
 });

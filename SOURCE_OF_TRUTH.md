@@ -45,6 +45,8 @@ Verified on 2026-09-03:
 
 ## Current development state
 
+2026-11-11 GitHub Skill-source update (no new application/npm release): `freshkeeper-check` defaults to current-directory comparison with a 60-second upstream budget, bounded concurrency and per-repository request reuse. Evidence is preflighted before network access. Per-item read/evidence failures, changed snapshots and timeouts preserve healthy results. Action groups distinguish proven update candidates, unverified differences, source repairs, upstream removals and targeted retries; an upstream removal is not a program failure. Historical matching is explicit with `--history --skill <name>`. Confirmed source tracking, declared `metadata.version`, unknown install-baseline protection and read-only defaults remain intact. Native Node regression tests are included in `npm test`. Published v1.5.0 state below remains a dated release record.
+
 v1.5.0 behavior (released and verified on 2026-10-08): the check Skill compares official well-known file-list sources and provides explicit `--fill-metadata` / `--apply-metadata` modes. The checker completes every selected local version and content snapshot before requesting any upstream version and rejects local changes during comparison. Ordinary checks remain read-only. Metadata repair preserves install-time hashes and unrelated lock fields, records content revisions and evidenced sources by physical path, and revalidates a verified backup, lock and installed snapshots before atomic replacement. Personal/local and application-bundled evidence maps stay in user runtime records. No Skill contents, binaries or schedules are updated by this mode.
 
 Verified on 2026-09-03:

@@ -3,12 +3,14 @@
 import { execFileSync } from 'node:child_process';
 import { access, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join, posix, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { auditProvenance } from './provenance.mjs';
+import { actionPlan } from './actions.mjs';
 import { applySourceEvidence, describeInstalled, fillMetadata, wellKnownChecker } from './version-tracking.mjs';
 
 const argv = process.argv.slice(2);
+const startedAt = Date.now();
 
 function options(name) {
   const values = [];
@@ -45,10 +47,22 @@ const historyLimitValue = option('--history-limit');
 const historyLimit = argv.includes('--no-history')
   ? 0
   : historyLimitValue === undefined
-    ? 200
+    ? argv.includes('--history') ? 200 : 0
     : Number.parseInt(historyLimitValue, 10);
 if (!Number.isInteger(historyLimit) || historyLimit < 0 || historyLimit > 200) {
   throw new Error('--history-limit must be an integer from 0 to 200');
+}
+const concurrency = Number(option('--concurrency') ?? 6);
+if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 12) throw new Error('--concurrency must be 1-12');
+const timeoutMs = Number(option('--timeout-ms') ?? (historyLimit > 0 ? 180000 : 60000));
+if (!Number.isInteger(timeoutMs) || timeoutMs < 50 || timeoutMs > 3600000) throw new Error('--timeout-ms must be 50-3600000');
+const deadline = startedAt + timeoutMs;
+let lastProgress = 0;
+function progress(message, force = false) {
+  if (argv.includes('--quiet')) return;
+  if (force || Date.now() - lastProgress >= 2000) {
+    process.stderr.write(`[freshkeeper] ${message}\n`); lastProgress = Date.now();
+  }
 }
 
 function configuredHome(envName, fallback) {
@@ -187,10 +201,14 @@ async function readInventory(root) {
     }
     if (!directory) continue;
     const skillFile = join(folder, 'SKILL.md');
-    if (!(await exists(skillFile))) continue;
-    const markdown = await readFile(skillFile, 'utf8');
+    let markdown = '', readError = null;
+    try { markdown = await readFile(skillFile, 'utf8'); } catch (error) {
+      if (error.code === 'ENOENT') continue;
+      readError = error.message;
+    }
     skills.push({
       folder: entry.name,
+      readError,
       name: parseName(markdown, entry.name),
       path: folder,
       realPath: await canonicalPath(folder),
@@ -263,50 +281,11 @@ function getGitHubToken() {
   try {
     return execFileSync('gh', ['auth', 'token'], {
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore']
+      stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000
     }).trim();
   } catch {
     return '';
   }
-}
-
-async function requestTree(source, ref, token) {
-  const url = `https://api.github.com/repos/${source}/git/trees/${encodeURIComponent(ref)}?recursive=1`;
-  const headers = {
-    Accept: 'application/vnd.github.v3+json',
-    'User-Agent': 'freshkeeper-check'
-  };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(url, {
-    headers,
-    signal: AbortSignal.timeout(15_000)
-  });
-  if (!response.ok) throw new Error(`GitHub returned HTTP ${response.status} for ${source}@${ref}`);
-  const data = await response.json();
-  if (!data?.sha || !Array.isArray(data.tree)) throw new Error(`GitHub returned an invalid tree for ${source}@${ref}`);
-  return { sha: data.sha, tree: data.tree, ref };
-}
-
-async function fetchTree(source, ref, token) {
-  const refs = ref ? [ref] : ['HEAD', 'main', 'master'];
-  let lastError;
-  for (const candidate of refs) {
-    try {
-      return await requestTree(source, candidate, token);
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  throw lastError ?? new Error(`Unable to fetch ${source}`);
-}
-
-function folderTreeHash(tree, skillPath) {
-  let folder = skillPath.replaceAll('\\', '/');
-  if (folder.toLowerCase().endsWith('/skill.md')) folder = folder.slice(0, -9);
-  else if (folder.toLowerCase().endsWith('skill.md')) folder = folder.slice(0, -8);
-  folder = folder.replace(/\/$/, '');
-  if (!folder) return tree.sha;
-  return tree.tree.find((entry) => entry.type === 'tree' && entry.path === posix.normalize(folder))?.sha;
 }
 
 function baseItem(skill, entry) {
@@ -337,12 +316,21 @@ const sourceMap = sourceMapPath ? JSON.parse(await readFile(sourceMapPath, 'utf8
 if (sourceMap && (sourceMap.version !== 1 || !sourceMap.sources || typeof sourceMap.sources !== 'object')) throw new Error('Invalid source evidence map');
 if (lock.freshkeeperTracking && (typeof lock.freshkeeperTracking !== 'object' || Array.isArray(lock.freshkeeperTracking))) throw new Error('Invalid tracking metadata');
 if (originalLock !== null && JSON.stringify(lock) !== JSON.stringify(JSON.parse(originalLock))) throw new Error('Lock changed while reading');
-// Establish every local version before credentials, network requests, or upstream recovery.
+// Preflight evidence before network access; retain independent results on failure.
+progress(`本地预检：${inventory.length} 项`, true);
 const localItems = new Map();
 for (const skill of inventory) {
   const entry = lock.skills[skill.name] ?? lock.skills[skill.folder];
-  localItems.set(skill.realPath, await describeInstalled(baseItem(skill, entry), lock.freshkeeperTracking?.[skill.realPath]));
+  let item = baseItem(skill, entry);
+  try {
+    if (skill.readError) throw new Error(skill.readError);
+    item = await describeInstalled(item, lock.freshkeeperTracking?.[skill.realPath]);
+  } catch (error) {
+    Object.assign(item, { status: 'check-failed', localReadError: true, reason: `Local Skill cannot be read: ${error.message}` });
+  }
+  localItems.set(skill.realPath, item);
 }
+await applySourceEvidence([...localItems.values()].filter(item => !item.localReadError), sourceMap?.sources, lock.freshkeeperTracking);
 const fixture = fixturePath ? JSON.parse(await readFile(fixturePath, 'utf8')) : null;
 let token;
 const githubToken = () => {
@@ -350,139 +338,87 @@ const githubToken = () => {
   if (token === undefined) token = getGitHubToken();
   return token;
 };
-const treePromises = new Map();
-
-for (const skill of inventory) {
-  const entry = lock.skills[skill.name] ?? lock.skills[skill.folder];
-  if (entry?.sourceType !== 'github' || !entry.source || !entry.skillFolderHash || !entry.skillPath) continue;
-  if (!/^[^/\s]+\/[^/\s]+$/.test(entry.source)) continue;
-  const key = `${entry.source}#${entry.ref ?? ''}`;
-  if (!treePromises.has(key)) {
-    treePromises.set(key, fixture
-      ? Promise.resolve(fixture[entry.source] ?? fixture[key]).then((value) => {
-          if (!value) throw new Error(`Fixture has no tree for ${entry.source}`);
-          return value;
-        })
-      : fetchTree(entry.source, entry.ref, githubToken()));
-  }
-}
-
-for (const promise of treePromises.values()) promise.catch(() => {});
-
 const provenanceTargets = inventory.filter((skill) => {
+  const item = localItems.get(skill.realPath);
   const entry = lock.skills[skill.name] ?? lock.skills[skill.folder];
-  return !entry || (entry.sourceType === 'github'
-    && (!entry.source || !entry.skillFolderHash || !entry.skillPath));
+  return !item.localReadError && !item.sourceEvidenceChecked && (!entry || entry.sourceType === 'github');
+}).map((skill) => {
+  const entry = lock.skills[skill.name] ?? lock.skills[skill.folder];
+  const tracked = lock.freshkeeperTracking?.[skill.realPath];
+  const recorded = entry?.sourceType === 'github' && entry.source ? entry
+    : tracked?.sourceStatus === 'confirmed' && ['github', 'github-recovered'].includes(tracked.sourceType) ? tracked : null;
+  return recorded ? { ...skill, recordedSource: recorded.source, recordedSkillPath: recorded.skillPath,
+    recordedFolderHash: recorded.skillFolderHash, recordedRef: recorded.ref } : skill;
 });
-const recovered = provenanceTargets.length > 0
-  ? await auditProvenance({
-      skills: provenanceTargets,
-      catalogPath,
-      fixture,
-      token: githubToken(),
-      historyLimit
-    })
-  : new Map();
-
+const checkWellKnown = wellKnownChecker(fixture, { deadline });
+const wellKnownResults = new Map();
+const wellKnownSkills = inventory.filter(skill => {
+  const item = localItems.get(skill.realPath);
+  const entry = lock.skills[skill.name] ?? lock.skills[skill.folder];
+  return !item.localReadError && !item.sourceEvidenceChecked && entry?.sourceType === 'well-known';
+});
+const wellKnownPromise = (async () => {
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(2, wellKnownSkills.length) }, async () => {
+    while (cursor < wellKnownSkills.length) {
+      const skill = wellKnownSkills[cursor++];
+      const entry = lock.skills[skill.name] ?? lock.skills[skill.folder];
+      try { wellKnownResults.set(skill.realPath, await checkWellKnown(skill, entry)); }
+      catch (error) { wellKnownResults.set(skill.realPath, { status: 'check-failed', reason: error.message }); }
+    }
+  }));
+})();
+progress(`当前上游比对：${provenanceTargets.length} 项 GitHub、${wellKnownSkills.length} 项官方索引；历史深度 ${historyLimit}`, true);
+const recovered = provenanceTargets.length ? await auditProvenance({
+  skills: provenanceTargets, catalogPath, fixture, token: githubToken(), historyLimit, concurrency, deadline,
+  onProgress: ({ completed, total, name }) => progress(`上游比对 ${completed}/${total}：${name}`)
+}) : new Map();
+await wellKnownPromise;
 const items = [];
-const checkWellKnown = wellKnownChecker(fixture);
 for (const skill of inventory) {
   const entry = lock.skills[skill.name] ?? lock.skills[skill.folder];
   const item = { ...localItems.get(skill.realPath) };
-  if (!entry) {
+  if (item.localReadError || item.sourceEvidenceChecked) { items.push(item); continue; }
+  if (entry?.sourceType === 'well-known') {
+    Object.assign(item, wellKnownResults.get(skill.realPath));
+  } else if (!entry || entry.sourceType === 'github') {
     const provenance = recovered.get(skill.realPath);
-    if (provenance && provenance.status !== 'unresolved') {
-      Object.assign(item, provenance, {
-        source: provenance.source,
-        sourceType: provenance.sourceType,
-        provenance
-      });
-    }
-    items.push(item);
-    continue;
-  }
-  if (entry.sourceType === 'local') {
-    item.status = 'local-only';
-    item.reason = 'Local source has no remote version to compare';
-    items.push(item);
-    continue;
-  }
-  if (entry.sourceType === 'well-known') {
-    Object.assign(item, await checkWellKnown(skill, entry));
-    items.push(item);
-    continue;
-  }
-  if (entry.sourceType !== 'github') {
-    item.status = 'uncheckable';
-    item.reason = entry.sourceType === 'well-known'
-      ? 'Well-known source is installed but has no comparable folder hash'
-      : `Unsupported source type: ${entry.sourceType ?? 'unknown'}`;
-    items.push(item);
-    continue;
-  }
-  if (!entry.source || !entry.skillFolderHash || !entry.skillPath) {
-    const provenance = recovered.get(skill.realPath);
-    if (provenance && !['unresolved', 'check-blocked'].includes(provenance.status)) {
-      Object.assign(item, provenance, {
-        source: provenance.source,
-        sourceType: provenance.sourceType,
-        provenance
-      });
-    } else {
-      item.status = provenance?.status ?? 'uncheckable';
-      item.reason = provenance?.reason ?? 'GitHub source metadata is incomplete';
-    }
-    items.push(item);
-    continue;
-  }
-  if (!/^[^/\s]+\/[^/\s]+$/.test(entry.source)) {
-    item.status = 'check-failed';
-    item.reason = `Invalid GitHub source: ${entry.source}`;
-    items.push(item);
-    continue;
-  }
-  const key = `${entry.source}#${entry.ref ?? ''}`;
-  try {
-    const tree = await treePromises.get(key);
-    const remoteHash = folderTreeHash(tree, entry.skillPath);
-    if (!remoteHash) {
-      item.status = 'missing-upstream';
-      item.reason = `Upstream no longer contains ${entry.skillPath}`;
-    } else {
-      item.remoteHash = remoteHash;
-      item.status = remoteHash === entry.skillFolderHash ? 'current' : 'update-available';
-      item.reason = item.status === 'current' ? 'Recorded install matches upstream' : 'Upstream folder hash changed';
-    }
-  } catch (error) {
-    item.status = 'check-failed';
-    item.reason = error.message;
+    if (provenance) Object.assign(item, provenance, { provenance });
+  } else if (entry.sourceType === 'local') {
+    item.status = 'local-only'; item.reason = 'Local source has no verified authorship evidence or remote version';
+  } else {
+    item.status = 'uncheckable'; item.reason = `Unsupported source type: ${entry.sourceType ?? 'unknown'}`;
   }
   items.push(item);
 }
-
-await applySourceEvidence(items, sourceMap?.sources, lock.freshkeeperTracking);
+progress('复核本地内容并生成行动清单', true);
 for (const item of items) {
   const before = localItems.get(item.realPath);
-  const after = await describeInstalled(item, lock.freshkeeperTracking?.[item.realPath]);
-  if (after.installedSnapshotHash !== before.installedSnapshotHash) {
-    throw new Error(`Local Skill changed during upstream comparison: ${item.name}; retry with a stable local version`);
+  if (!before.installedSnapshotHash) continue;
+  try {
+    const after = await describeInstalled(item, lock.freshkeeperTracking?.[item.realPath]);
+    if (after.installedSnapshotHash !== before.installedSnapshotHash) throw new Error('Local Skill changed during comparison; retry this item only');
+  } catch (error) {
+    item.status = 'check-blocked'; item.revalidationFailed = true; item.reason = error.message;
   }
-  // Keep the local preflight identity separate from recovered upstream fields.
   item.installedSnapshotHash = before.installedSnapshotHash;
   item.installedVersion = before.installedVersion;
   item.installedDeclaredVersion = before.installedDeclaredVersion;
 }
-const metadata = fill ? await fillMetadata({ items, lock, lockPath, original: originalLock, apply: applyMetadata }) : null;
-
+const eligibleMetadata = items.filter(item => !item.localReadError && !item.evidenceError && !item.revalidationFailed
+  && !['check-failed', 'check-blocked'].includes(item.status));
+const metadata = fill ? await fillMetadata({ items: eligibleMetadata, lock, lockPath, original: originalLock, apply: applyMetadata }) : null;
+const actions = actionPlan(items);
 const installedNames = new Set(allInventory.flatMap((skill) => [skill.name, skill.folder]));
 const staleLockEntries = Object.keys(lock.skills).filter((name) => !installedNames.has(name)).sort();
 const count = (status) => items.filter((item) => item.status === status).length;
-const currentStatuses = new Set(['current', 'exact-current', 'local-extension', 'bundled-current']);
+const currentStatuses = new Set(['current', 'exact-current', 'local-extension', 'bundled-current', 'local-modified']);
 const updateStatuses = new Set(['update-available', 'clean-old', 'current-subset']);
 const checkableStatuses = new Set([
   ...currentStatuses,
   ...updateStatuses,
   'manual-merge',
+  'needs-review',
   'local-ahead',
   'legacy-local',
   'missing-upstream',
@@ -491,6 +427,9 @@ const checkableStatuses = new Set([
 ]);
 const result = {
   generatedAt: new Date().toISOString(),
+  mode: historyLimit > 0 ? 'deep' : 'quick', historyLimit, timeoutMs,
+  elapsedSeconds: Math.round((Date.now() - startedAt) / 100) / 10,
+  budgetExceeded: Date.now() > deadline, actions,
   libraryMode: resolved.mode,
   skillsRoot: resolved.libraries.length === 1 ? resolved.libraries[0].path : null,
   skillRoots: resolved.libraries.map((library) => library.path),
@@ -504,12 +443,15 @@ const result = {
   current: items.filter((item) => currentStatuses.has(item.status)).length,
   updatesAvailable: items.filter((item) => updateStatuses.has(item.status)).length,
   manualMerge: count('manual-merge'),
+  needsReview: actions.needsReview.length, localModified: count('local-modified'),
   localAhead: count('local-ahead'),
   localTracked: count('local-tracked'),
   legacyLocal: count('legacy-local'),
   unresolved: items.filter((item) => ['untracked', 'unresolved', 'uncheckable', 'local-only'].includes(item.status)).length,
   uncheckable: items.filter((item) => ['untracked', 'unresolved', 'uncheckable', 'local-only'].includes(item.status)).length,
-  errors: count('check-failed') + count('missing-upstream') + count('check-blocked'),
+  errors: count('check-failed') + count('check-blocked'),
+  upstreamMissing: count('missing-upstream'),
+  retired: actions.retired.length,
   staleLockEntries,
   metadataTracked: items.filter(item => item.metadataTracked).length,
   localDrift: items.filter(item => item.localDrift).length,
@@ -527,23 +469,19 @@ if (json) {
   for (const library of resolved.libraries) {
     console.log(`- ${library.path} [${library.agents.join(', ')}]`);
   }
-  console.log(`Checkable: ${result.checkable} | Recovered sources: ${result.recoveredSources} | Current: ${result.current} | Safe updates: ${result.updatesAvailable} | Manual merge: ${result.manualMerge} | Unresolved: ${result.unresolved} | Errors: ${result.errors}`);
-  const updates = items.filter((item) => updateStatuses.has(item.status));
-  if (updates.length) {
-    console.log('Safe updates available:');
-    for (const item of updates) console.log(`- ${item.name}: ${item.status} (${item.source}) [${item.agents.join(', ')}]`);
-  } else {
-    console.log('No updates were confirmed for the checkable skills.');
+  console.log(`模式: ${result.mode} | 用时: ${result.elapsedSeconds}s | 当前一致/本地适配: ${result.current} | 已验证更新候选: ${result.updatesAvailable} | 需核对差异: ${result.needsReview} | 来源缺口: ${result.unresolved} | 上游移除: ${result.retired} | 执行失败: ${result.errors}`);
+  const labels = { updateCandidates: '可按授权更新', needsReview: '先核对差异（可仅对此项深查）', sourceRepairs: '需要修复来源登记或证据', retired: '上游已移除/迁移，保留本地待核实', retry: '仅重试这些失败项' };
+  for (const [group, label] of Object.entries(labels)) {
+    const entries = actions[group];
+    if (!entries.length) continue;
+    console.log(`${label}: ${entries.length}`);
+    for (const action of entries.slice(0, details ? undefined : 12)) console.log(`- ${action.name}: ${action.label} (${action.reason})`);
+    if (!details && entries.length > 12) console.log(`  另有 ${entries.length - 12} 项，使用 --details 或 --json 查看完整清单。`);
   }
-  const manual = items.filter((item) => item.status === 'manual-merge');
-  if (manual.length) {
-    console.log('Manual merge required:');
-    for (const item of manual) console.log(`- ${item.name} (${item.source})`);
-  }
+  if (result.mode === 'quick') console.log('快速比对未追溯历史；存在差异不等于需要人工合并。仅对需要的项目加 --history --skill <name>。');
+  if (result.budgetExceeded) console.log('本轮达到时间预算；已完成结果保留，超时项单列，不代表已经最新。');
   if (staleLockEntries.length) console.log(`Stale lock entries: ${staleLockEntries.join(', ')}`);
-  if (metadata) console.log(`Metadata ${metadata.mode}: ${metadata.actions.length} Skill(s); backup: ${metadata.backupPath ?? 'none (preview or new lock)'}`);
-  const errors = items.filter(item => ['check-failed', 'check-blocked', 'missing-upstream'].includes(item.status));
-  for (const item of errors) console.log(`Check error: ${item.name}: ${item.reason}`);
+  if (metadata) console.log(`Metadata ${metadata.mode}: ${metadata.actions.length}; backup: ${metadata.backupPath ?? 'none'}`);
   if (details) {
     console.log();
     console.log('Skill\tStatus\tAgents\tSource\tInstalled version\tUpstream version\tReason');
@@ -555,4 +493,5 @@ if (json) {
   }
 }
 
+progress(`完成：${result.totalInstalled} 项，${result.elapsedSeconds}s`, true);
 if (result.errors > 0) process.exitCode = 1;

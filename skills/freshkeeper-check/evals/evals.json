@@ -4,7 +4,7 @@
     {
       "id": 1,
       "prompt": "$freshkeeper-check，检查我装的所有 Skill 有没有更新，只给结论，不要修改。",
-      "expected_output": "Run the bundled read-only installed-Skill checker against the shared library when present, otherwise use supported agent-local libraries, and summarize updates, coverage gaps, and errors without invoking any update command.",
+      "expected_output": "Run quick mode without history, preserve read-only state, and report elapsed time plus update/review/source-repair/retry actions.",
       "files": [],
       "expectations": [
         "Prefers the shared/global Skill library when it exists",
@@ -16,7 +16,7 @@
     {
       "id": 2,
       "prompt": "$freshkeeper-check with details，把每个 Skill 的来源、能不能检查、有没有更新都列出来。",
-      "expected_output": "Run check-installed-skills.mjs with --details and report every installed Skill, including untracked, local-only, uncheckable, current, update-available, and failed states.",
+      "expected_output": "Use --details for complete rows while retaining quick mode; do not turn reporting detail into deep history.",
       "files": [],
       "expectations": [
         "Treats with details as a reporting mode",
@@ -40,8 +40,8 @@
     },
     {
       "id": 4,
-      "prompt": "$freshkeeper-check with details。很多 Skill 没有 lock，别直接说不可核对；恢复来源，判断哪些是旧版、哪些被我改过。",
-      "expected_output": "Use the verified provenance catalog and strong local evidence, compare whole Skill trees, search upstream history for divergent entries, and report exact-current, clean-old, current-subset, local-extension, manual-merge, local-ahead, legacy-local, unresolved, and blocked states without changing the library or lock.",
+      "prompt": "$freshkeeper-check，针对我指定的技能追溯历史，证明哪些是旧版、哪些需要保留适配，不要更新。",
+      "expected_output": "Use --history only for selected requested names; preserve source evidence, distinguish proven older matches from unverified differences and do not write.",
       "files": [],
       "expectations": [
         "Does not treat a same-name search result as proof",
@@ -50,6 +50,12 @@
         "Separates safe updates from manual merges and local extensions",
         "Does not write recovered provenance into the global lock"
       ]
+    },
+    {
+      "id": 5,
+      "prompt": "检查时有一个来源证据文件不见了，其他项目继续，告诉我该修什么。",
+      "expected_output": "Retain every item; report one evidence error with a targeted repair action, healthy items complete, no whole-run crash or unrequested repair.",
+      "files": []
     }
   ]
 }

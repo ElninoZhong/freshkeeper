@@ -1,108 +1,93 @@
 ---
 name: freshkeeper-check
-description: Audit installed Skill versions, provenance and whole-directory drift; optionally fill missing version and
-  source tracking on explicit request. Use for update readiness or source coverage; prefer the shared library.
+description: "Quickly check installed Skill sources and updates, then give actionable next steps; trace history only when requested."
 ---
 
 # Freshkeeper Check
 
-Inspect the user's installed Skills. Ordinary checks are read-only. An explicit request to fill versions or source tracking authorizes metadata repair only. Do not check or update Claude Code, Codex, OpenClaw, Hermes, Freshkeeper itself, plugins, schedules, or project toolchain locks.
+Check installed Skills and explain what to do next. Ordinary checks are read-only.
+An explicit request to fill source/version tracking authorizes metadata repair only.
+Keep AI tools, Freshkeeper application binaries, plugins, schedules and project locks outside this workflow.
 
-## Discover the installed libraries
+## Default: quick and bounded
 
-Use this order:
-
-1. If the shared Universal library `~/.agents/skills` exists, treat it as canonical and check it.
-2. Otherwise, discover the user-level Skill libraries for Claude Code, Codex, OpenClaw, and Hermes. Respect `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and `HERMES_HOME`; also recognize OpenClaw's `.openclaw`, `.clawdbot`, and `.moltbot` homes.
-3. Resolve real paths. Count one physical Skill once when multiple tools reach it through directory or Skill symlinks, while retaining every tool that can see it.
-4. Treat distinct copied installations as distinct even when they share the same Skill name.
-
-Read global source metadata from `$XDG_STATE_HOME/skills/.skill-lock.json` when `XDG_STATE_HOME` is set, otherwise `~/.agents/.skill-lock.json`. For missing metadata, accept a source only after the bundled catalog, an embedded Git remote, frontmatter, NOTICE, or README points to a repository and the official tree contains a comparable Skill path. A same-name search result alone is never proof.
-
-## Choose the output mode
-
-- `$freshkeeper-check` or `freshkeeper check`: return library mode, totals, confirmed updates, coverage gaps, and errors.
-- `$freshkeeper-check with details` or “详细检查”: additionally list every installed Skill with status, visible tools, source, and reason.
-- Treat `with details` as an output mode, not a Skills CLI argument.
-
-## Run the read-only checker
-
-Resolve the directory containing this `SKILL.md`, then run:
+Resolve this Skill directory and run:
 
 ```text
 node <skill-directory>/scripts/check-installed-skills.mjs
 ```
 
-For detailed output, add `--details`. Use `--json` only when structured output helps analysis. History matching checks up to 200 relevant commits by default and uses a temporary bare clone only for divergent or removed paths. Use `--no-history` for a faster current-tree-only pass, or `--history-limit <0-200>` to set an explicit depth.
+- Prefer `~/.agents/skills`; otherwise use existing supported agent-local libraries. Resolve physical paths and count aliases once, retaining visible tools.
+- Default to current-directory comparison, six concurrent provenance checks and a 60-second upstream work budget. Repository responses are reused within the run. Ordinary checks never write a library, source lock or persistent cache.
+- Use `--json` for analysis or `--details` for every row. “with details” changes reporting, not history depth.
+- Read and validate local evidence before network calls. A missing evidence path or one failed Skill stays in the result and does not discard healthy results.
+- Stop the whole run only when the library root or source lock cannot be read safely. Changed local files and timeouts invalidate only the affected results.
+- Retry only affected names using repeated `--skill <name>`; do not rerun the full library to recover one failed item.
 
-The checker:
+The global source lock is `$XDG_STATE_HOME/skills/.skill-lock.json` when configured,
+otherwise `~/.agents/.skill-lock.json`. Reuse confirmed per-path provenance as well
+as CLI source entries. A referenced repository must still contain a comparable
+current or evidenced historical Skill path; a same-name search alone is not proof.
 
-1. Selects the shared library or agent-local fallback libraries.
-2. Inventories top-level directories containing `SKILL.md` and deduplicates symlink aliases by real path.
-3. Reads recorded sources from the global `.skill-lock.json` and completes the local version/whole-directory snapshot preflight for every selected Skill before making any upstream request. A local read failure stops the check.
-4. Recovers missing provenance from strong local evidence and the bundled verified catalog.
-5. Compares normalized Git blob snapshots of the whole Skill directory, ignoring only runtime artifacts such as `.git`, `__pycache__`, `.DS_Store`, and `*.pyc`.
-6. When current content differs, searches upstream history to prove whether the installed files match an older commit. Revalidates the local snapshots before reporting or filling metadata; a local change during the check stops the run.
-7. In ordinary check mode, never writes to a Skill library, lock file, or provenance cache. Temporary Git data is removed before exit.
+## History: only when needed
 
-For official `.well-known/skills` or `.well-known/agent-skills` file-list indexes, compare the whole directory and the install-time `wellKnownDigest`. Check errors remain visible; a failed request never means current. An index protocol version is not a Skill release version.
+Use this when the user requests history/deep checking, or needs proof that a
+particular divergent Skill is an unchanged old release:
 
-## Fill missing version and source tracking
+```text
+node <skill-directory>/scripts/check-installed-skills.mjs --history --skill <name>
+```
 
-Use this mode only when the user explicitly requests it. Preview first:
+`--history` checks up to 200 relevant commits, within a default 180-second budget.
+`--history-limit <0-200>` controls the depth; `--no-history` explicitly selects quick mode.
+Use `--timeout-ms <milliseconds>` only when the task needs a different budget.
+Temporary bare clones are cleaned up. Do not start library-wide history merely
+because a quick check found differences.
+
+## Report actions, not just counts
+
+Lead with mode, coverage and elapsed time, then use the script's `actions` groups:
+
+- **Update candidates:** `clean-old`, `current-subset`, or a well-known `update-available` verified against its installed directory digest has a proven basis. Describe the proposed update; execute it only under an update request.
+- **Review differences:** `needs-review` means current content differs and history has not established its base. It is not proof of local modification or a required manual merge. Deep-check only selected items if useful.
+- **Preserve local adaptation:** `local-modified` means the recorded upstream base is current while local content differs. `local-extension` retains additional local files. Neither should trigger a wholesale replacement.
+- **Repair sources:** identify missing provenance or the specific evidence pointer to repair, with the evidence still needed. Do not guess.
+- **Retired/moved upstream:** keep the local Skill and report the missing path. Do not delete it.
+- **Retry:** isolate network errors, unreadable items, changed files and timeouts. A failed check never means current.
+- **No action:** whole-directory matches, verified local authorship and deliberately local-ahead Skills.
+
+The concise response should name the small actionable sets and link or use detailed
+output for large lists. Include source coverage gaps and errors. Never claim all
+Skills are current when any source or check is unresolved. Do not suggest the same
+full-library rerun as the next step.
+
+## Explicit metadata repair
+
+Only when requested, preview and then apply:
 
 ```text
 node <skill-directory>/scripts/check-installed-skills.mjs --fill-metadata --json
-```
-
-Then apply the authorized metadata repair:
-
-```text
 node <skill-directory>/scripts/check-installed-skills.mjs --fill-metadata --apply-metadata --json
 ```
 
-Use repeated `--skill <installed-name>` to limit the repair to named existing Skills. `--fill-metadata` without `--apply-metadata` never writes.
+Limit scope with `--skill`. Failed or changed items are excluded from writes;
+valid items retain their own results. The writer backs up and verifies the source
+lock, revalidates local snapshots and commits atomically. Preserve existing
+installation baselines and unrelated fields. Track actual root or `metadata.version`
+values when present, otherwise content revisions; never assign today's upstream
+release to a different local copy. Unknown Git installation baselines remain unknown
+and must not become automatic CLI update entries.
 
-- Record an actual frontmatter version when present, an evidenced Git revision when matched, or a SHA-256 content revision otherwise. Never invent a semantic version or assign the current upstream release to a different installed copy.
-- Keep installed content identity, the first tracking baseline, and observed upstream version separate. Do not replace the installation-time Git folder hash or `wellKnownDigest` with the latest upstream hash.
-- Store per-physical-path records in the global lock's `freshkeeperTracking` field; aliases share a record, separate copies retain separate records. Preserve other lock fields. Confirmed recovered GitHub sources can also become ordinary source entries without pretending their installed revision is known.
-- Before writing, revalidate the lock and installed snapshots, create and verify a recovery copy, then atomically replace only the metadata file. No Skill content is refreshed.
-- Report unknown origins honestly, even when a local content revision has been recorded. A tracked unknown origin is still a coverage gap.
-- For locally authored or application-bundled Skills, read [references/version-tracking.md](references/version-tracking.md) to supply an explicit evidence map. Personal evidence paths belong to runtime metadata, not the publishable catalog.
+For evidenced local or application-bundled origins, read
+[references/version-tracking.md](references/version-tracking.md) and provide the
+explicit source map described there. Personal evidence belongs in runtime metadata,
+not the publishable catalog.
 
-## Interpret results honestly
+## Boundaries
 
-Use these meanings:
-
-- `current`: the recorded installed GitHub folder hash matches upstream.
-- `update-available`: the upstream folder hash changed.
-- `exact-current`: recovered source and entire installed directory match current upstream.
-- `clean-old`: installed files match a historical upstream commit and can be three-way updated.
-- `current-subset`: every installed file matches current upstream; only upstream resources are missing.
-- `local-extension`: the upstream tree is current and additional local files must be preserved.
-- `manual-merge`: local and upstream content both changed; never overwrite automatically.
-- `local-ahead`: local source is newer than the published remote.
-- `legacy-local`: installed files match upstream history, but the current branch removed the Skill.
-- `unresolved`: no reliable public source was proven.
-- `untracked`: the Skill exists locally but has no source entry and source recovery found nothing reliable.
-- `uncheckable`: a source exists but lacks comparable version metadata.
-- `local-only`: the recorded source is local.
-- `local-tracked`: local authorship is evidenced and its content revision is tracked; there is no public upstream release to compare.
-- `bundled-current`: the directory matches its evidenced application-bundled source.
-- `missing-upstream`, `check-blocked`, or `check-failed`: report the problem; do not call the Skill current.
-
-Say “no updates confirmed among checkable Skills,” not “all Skills are current,” when any installed Skill is uncheckable.
-
-## Safety boundary
-
-- Never run `skills update`, `skills add`, `skills remove`, or any Freshkeeper update command.
-- Never modify, delete, reconcile, migrate, or prune any Skill library.
-- Ordinary checks never write recovered provenance into `.skill-lock.json`. Explicit metadata-fill mode may write only evidenced sources and content tracking after backup and revalidation.
-- Keep GitHub comparison read-only.
-
-## Invocation examples
-
-- `$freshkeeper-check`
-- `$freshkeeper-check with details`
-- `检查我安装的所有 Skill 有没有更新，不要安装`
-- `补全缺失版本号和来源追踪，只补元数据，不更新 Skill 内容`
+Do not run `skills update`, `skills add`, `skills remove`, or another update command
+under a check request. Do not delete, reconcile, migrate or prune Skill libraries.
+Metadata repair never refreshes Skill content. Compare the whole normalized directory,
+ignoring only runtime artifacts such as `.git`, `node_modules`, `__pycache__`, `.DS_Store`
+and `*.pyc`. Source/index request failures remain visible; an index protocol version
+is not a Skill release.

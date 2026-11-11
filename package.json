@@ -17,10 +17,11 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
-    "test": "vitest run",
+    "test": "vitest run && npm run test:skill-check",
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test",
+    "test:skill-check": "node --test skills/freshkeeper-check/tests/*.test.mjs"
   },
   "dependencies": {
     "chalk": "^5.3.0",

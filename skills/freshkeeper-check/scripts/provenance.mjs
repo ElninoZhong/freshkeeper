@@ -107,7 +107,9 @@ function githubRepository(value) {
 }
 
 function addCandidate(candidates, candidate) {
-  if (!candidate?.source || !/^[^/\s]+\/[^/\s]+$/.test(candidate.source)) return;
+  const source = githubRepository(candidate?.source);
+  if (!source || ['sponsors', 'topics', 'features', 'orgs', 'users', 'settings', 'marketplace'].includes(source.split('/')[0].toLowerCase())) return;
+  candidate = { ...candidate, source };
   const key = `${candidate.source}#${normalizeSkillPath(candidate.skillPath)}`;
   const existing = candidates.get(key);
   if (!existing || existing.score < candidate.score) {
@@ -143,6 +145,13 @@ export async function loadProvenanceCatalog(path) {
 
 async function evidenceCandidates(skill, catalog) {
   const candidates = new Map();
+  // Reuse an evidenced source even when its installation-time Git revision
+  // is unknown. The official tree is still verified before accepting it.
+  const recordedSource = githubRepository(skill.recordedSource);
+  if (recordedSource) addCandidate(candidates, {
+    source: recordedSource, skillPath: skill.recordedSkillPath,
+    score: 100, evidence: ['recorded-source-metadata']
+  });
   for (const key of [skill.name, skill.folder]) {
     if (catalog.has(key)) addCandidate(candidates, catalog.get(key));
   }
@@ -166,7 +175,7 @@ async function evidenceCandidates(skill, catalog) {
       continue;
     }
     const metadata = content.match(/^---\s*\n([\s\S]*?)\n---/)?.[1] ?? '';
-    for (const match of metadata.matchAll(/^\s*(?:homepage|repository|github|source)\s*:\s*["']?([^\n"']+)/gmi)) {
+    for (const match of metadata.matchAll(/^\s*(?:homepage|repository|official_repository|github|source)\s*:\s*["']?([^\n"']+)/gmi)) {
       const source = githubRepository(match[1]);
       if (source) addCandidate(candidates, { source, score: 95, evidence: [`frontmatter:${file}`] });
     }
@@ -201,30 +210,31 @@ function inferSkillPath(tree, skill, candidate) {
   return null;
 }
 
-async function requestJson(url, token) {
+async function requestJson(url, token, deadline = Infinity) {
+  if (Date.now() >= deadline) throw new Error('Check time budget exceeded; retry this item only');
   const headers = {
     Accept: 'application/vnd.github.v3+json',
     'User-Agent': 'freshkeeper-provenance'
   };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
+  const response = await fetch(url, { headers, signal: AbortSignal.timeout(Math.max(1, Math.min(20_000, deadline - Date.now()))) });
   if (!response.ok) throw new Error(`GitHub returned HTTP ${response.status}`);
   return response.json();
 }
 
-async function fetchCurrentTree(source, token) {
+async function fetchCurrentTree(source, token, deadline = Infinity, requestedRef = null) {
   let lastError;
-  for (const ref of ['HEAD', 'main', 'master']) {
+  for (const ref of (requestedRef ? [requestedRef] : ['HEAD', 'main', 'master'])) {
     try {
       const commit = await requestJson(
         `https://api.github.com/repos/${source}/commits/${encodeURIComponent(ref)}`,
-        token
+        token, deadline
       );
       const treeSha = commit?.commit?.tree?.sha;
       if (!treeSha) throw new Error('GitHub commit response has no tree SHA');
       const data = await requestJson(
         `https://api.github.com/repos/${source}/git/trees/${treeSha}?recursive=1`,
-        token
+        token, deadline
       );
       if (!data?.sha || !Array.isArray(data.tree) || data.truncated) {
         throw new Error('GitHub returned an incomplete tree');
@@ -233,6 +243,7 @@ async function fetchCurrentTree(source, token) {
       return { ...data, sha: treeSha, commitSha: commit.sha, ref };
     } catch (error) {
       lastError = error;
+      if (Date.now() >= deadline) break;
     }
   }
   throw new Error(`${source}: ${lastError?.message ?? 'cannot read upstream'}`);
@@ -269,7 +280,7 @@ async function findHistoricalMatch({ source, skillPath, local, historyLimit, fix
     }
     return null;
   }
-  if (historyLimit <= 0) return null;
+  if (fixtureRecord || historyLimit <= 0 || Date.now() >= (cloneState.deadline ?? Infinity)) return null;
 
   if (!cloneState.root) cloneState.root = await mkdtemp(join(tmpdir(), 'freshkeeper-provenance-'));
   if (!cloneState.repositories.has(source)) {
@@ -285,7 +296,7 @@ async function findHistoricalMatch({ source, skillPath, local, historyLimit, fix
       ], {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
-        timeout: 120_000
+        timeout: Math.max(1, Math.min(120_000, (cloneState.deadline ?? Infinity) - Date.now()))
       });
       cloneState.repositories.set(source, destination);
     } catch (error) {
@@ -304,6 +315,7 @@ async function findHistoricalMatch({ source, skillPath, local, historyLimit, fix
     stdio: ['ignore', 'pipe', 'ignore']
   }).trim().split('\n').filter(Boolean);
   for (const commit of commits) {
+    if (Date.now() >= (cloneState.deadline ?? Infinity)) break;
     const relation = compareSnapshots(local, gitTreeSnapshot(repository, commit, prefix));
     if (relation.exact || relation.localSubset) return { commit, relation };
   }
@@ -318,7 +330,9 @@ function statusReason(status, relation, baseCommit) {
     case 'clean-old': return `Installed files match historical upstream commit ${baseCommit?.slice(0, 12)}`;
     case 'legacy-local': return `Installed files match historical commit ${baseCommit?.slice(0, 12)}, but the path is absent upstream`;
     case 'local-ahead': return 'Catalog policy marks this Skill as locally maintained ahead of the published source';
-    case 'manual-merge': return 'Local and upstream content both differ; a three-way merge is required';
+    case 'local-modified': return 'The recorded upstream base is current; preserve local modifications';
+    case 'needs-review': return 'Current files differ; the historical base has not been checked';
+    case 'manual-merge': return 'Preserve local changes and review the difference before updating';
     case 'missing-upstream': return 'The confirmed repository no longer contains a matching Skill path';
     default: return 'Source recovery did not produce a comparable upstream tree';
   }
@@ -332,6 +346,8 @@ function ranking(status) {
     'clean-old': 85,
     'legacy-local': 80,
     'local-ahead': 75,
+    'local-modified': 90,
+    'needs-review': 60,
     'manual-merge': 60,
     'missing-upstream': 30,
     'check-blocked': 10
@@ -343,15 +359,18 @@ export async function auditProvenance({
   catalogPath,
   fixture = null,
   token = '',
-  historyLimit = 40
+  historyLimit = 0,
+  concurrency = 6,
+  deadline = Infinity,
+  onProgress = () => {}
 }) {
   const catalog = await loadProvenanceCatalog(catalogPath);
   const currentTrees = new Map();
-  const cloneState = { root: null, repositories: new Map() };
+  const cloneState = { root: null, repositories: new Map(), deadline };
   const results = new Map();
 
-  try {
-    for (const skill of skills) {
+  let completed = 0;
+  const inspect = async (skill) => {
       const local = await localSnapshot(skill.realPath ?? skill.path);
       const candidates = await evidenceCandidates(skill, catalog);
       let best = null;
@@ -360,13 +379,15 @@ export async function auditProvenance({
       for (const candidate of candidates) {
         let tree;
         try {
-          if (!currentTrees.has(candidate.source)) {
-            const fixtureRecord = fixture?.[candidate.source];
-            currentTrees.set(candidate.source, fixtureRecord
+          const key = `${candidate.source}#${skill.recordedRef ?? ''}`;
+          if (!currentTrees.has(key)) {
+            const fixtureRecord = fixture?.[key] ?? fixture?.[candidate.source];
+            if (fixture && !fixtureRecord) throw new Error(`Fixture has no tree for ${candidate.source}`);
+            currentTrees.set(key, fixtureRecord
               ? Promise.resolve(fixtureRecord.current ?? fixtureRecord)
-              : fetchCurrentTree(candidate.source, token));
+              : fetchCurrentTree(candidate.source, token, deadline, skill.recordedRef));
           }
-          tree = await currentTrees.get(candidate.source);
+          tree = await currentTrees.get(key);
         } catch (error) {
           failures.push(`${candidate.source}: ${error.message}`);
           continue;
@@ -385,6 +406,9 @@ export async function auditProvenance({
         else if (candidate.policy === 'local-ahead' && pathExists) status = 'local-ahead';
         else if (pathExists && relation.localSubset) status = 'current-subset';
         else if (pathExists && relation.remoteSubset) status = 'local-extension';
+        else if (pathExists && skill.recordedFolderHash && skill.recordedFolderHash === (skillPath
+          ? tree.tree.find(entry => entry.type === 'tree' && entry.path === skillPath)?.sha : tree.sha)) status = 'local-modified';
+        else if (pathExists && historyLimit === 0) status = 'needs-review';
         else {
           const historical = await findHistoricalMatch({
             source: candidate.source,
@@ -431,13 +455,14 @@ export async function auditProvenance({
           changedFiles: relation.changed,
           localOnlyFiles: relation.localOnly,
           upstreamOnlyFiles: relation.remoteOnly,
-          historicalRelation
+          historicalRelation,
+          historyChecked: historyLimit > 0
         };
         if (!best || ranking(result.status) > ranking(best.status)
           || (ranking(result.status) === ranking(best.status) && candidate.score > best.candidateScore)) {
           best = { ...result, candidateScore: candidate.score };
         }
-        if (ranking(best.status) >= 95) break;
+        if (ranking(best.status) >= 95 || (candidate.score >= 95 && best.confidence === 'confirmed')) break;
       }
 
       if (best) {
@@ -468,6 +493,27 @@ export async function auditProvenance({
           historicalRelation: null
         });
       }
+    completed += 1;
+    onProgress({ completed, total: skills.length, name: skill.name });
+  };
+  const inspectSafely = async (skill) => {
+    try { await inspect(skill); }
+    catch (error) {
+      results.set(skill.realPath ?? skill.path, { name: skill.name, folder: skill.folder,
+        source: skill.recordedSource ?? null, sourceType: skill.recordedSource ? 'github-recovered' : null,
+        status: 'check-failed', reason: `Skill comparison failed: ${error.message}` });
+      completed += 1;
+      onProgress({ completed, total: skills.length, name: skill.name });
+    }
+  };
+  try {
+    if (historyLimit > 0) {
+      for (const skill of skills) await inspectSafely(skill);
+    } else {
+      let cursor = 0;
+      await Promise.all(Array.from({ length: Math.min(concurrency, skills.length) }, async () => {
+        while (cursor < skills.length) await inspectSafely(skills[cursor++]);
+      }));
     }
   } finally {
     if (cloneState.root) await rm(cloneState.root, { recursive: true, force: true });
