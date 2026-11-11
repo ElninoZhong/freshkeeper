@@ -371,6 +371,7 @@ describe('Freshkeeper installed-Skill library discovery', () => {
       '--fixture', fixture,
       '--provenance-catalog', catalog,
       '--backup',
+      '--history',
       '--write-plan', planPath,
       '--json'
     ]);

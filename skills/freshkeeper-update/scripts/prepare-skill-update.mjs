@@ -39,7 +39,7 @@ const historyLimitValue = option('--history-limit');
 const historyLimit = argv.includes('--no-history')
   ? 0
   : historyLimitValue === undefined
-    ? 200
+    ? argv.includes('--history') ? 200 : 0
     : Number.parseInt(historyLimitValue, 10);
 if (!Number.isInteger(historyLimit) || historyLimit < 0 || historyLimit > 200) {
   throw new Error('--history-limit must be an integer from 0 to 200');
@@ -367,7 +367,7 @@ async function backUp(resolved, inventory, lockPath) {
   for (let index = 0; index < resolved.libraries.length; index += 1) {
     const library = resolved.libraries[index];
     const destination = join(backupRoot, 'libraries', `root-${index + 1}`);
-    await cp(library.realPath, destination, { recursive: true, dereference: false, preserveTimestamps: true });
+    await cp(library.realPath, destination, { recursive: true, dereference: false, verbatimSymlinks: true, preserveTimestamps: true });
     if (!(await isDirectory(destination))) throw new Error(`Backup verification failed for ${library.path}`);
     backedUpLibraries.push({ ...library, backupPath: destination });
   }

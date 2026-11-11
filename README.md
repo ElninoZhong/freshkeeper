@@ -33,7 +33,15 @@ npx skills add ElninoZhong/freshkeeper --skill freshkeeper-update -g -y
 
 These Agent Skills manage installed Skill libraries, not the Freshkeeper CLI or AI coding tool binaries. They prefer the shared Universal library and fall back to supported agent-local libraries. `$freshkeeper-check` now defaults to a bounded current-directory comparison: no history scan, repository-response reuse, concurrent checks, and a 60-second upstream work budget. Single-item failures preserve other results. Its action plan separates proven update candidates, unverified differences, source repairs, upstream removals, and targeted retries. History matching is explicit with `--history --skill <name>`; `with details` changes reporting only.
 
-`$freshkeeper-update` remains backup-first and applies only updates with a proven safe basis. Local adaptations, unresolved sources, and upstream-deleted Skills remain protected.
+`$freshkeeper-update` now uses one self-contained, resumable workflow: quick check → staged payload → target-only verified recovery set → transactional writes → local verification. It reuses saved checks and HTTP responses, preserves descriptions and custom permissions only when a recorded base proves the remaining contents unchanged, and protects body/script changes. The default overall work budget is 180 seconds. A repeated completed plan does not update twice; failed writes resume with `--plan ... --apply --retry-failed`, while source/check failures use a new `--skill <name>` run. No global Skills CLI overwrite or temporary installer is required.
+
+```bash
+node /path/to/freshkeeper-update/scripts/update-skills.mjs --apply --json
+# Preview without changing installed Skills:
+node /path/to/freshkeeper-update/scripts/update-skills.mjs --json --write-plan /tmp/skill-plan.json
+# Apply the same verified plan without rescanning:
+node /path/to/freshkeeper-update/scripts/update-skills.mjs --plan /tmp/skill-plan.json --apply --json
+```
 
 In v1.5, `$freshkeeper-check` establishes all selected local versions and content snapshots before querying upstream. It compares official well-known file-list sources and supports explicit metadata repair: request “fill missing versions and source tracking” to preview, back up, and atomically record evidenced sources and content revisions without updating Skill contents. Ordinary checks remain read-only; declared versions, installed content hashes, and upstream revisions are reported separately.
 

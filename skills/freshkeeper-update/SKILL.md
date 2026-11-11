@@ -1,120 +1,111 @@
 ---
 name: freshkeeper-update
-description: Safely update installed Skills from both recorded and evidence-recovered sources. Back up selected libraries, compare whole directories, prove clean historical bases, add missing upstream resources, preserve local extensions, require manual merges for diverged content, and retain locally ahead or upstream-deleted Skills. Use when the user invokes `$freshkeeper-update`, says `freshkeeper update`, or explicitly asks to update all installed Skills. Prefer the shared library and fall back to supported AI tools' user-level libraries; never update Freshkeeper itself, AI tool binaries, plugins, or agents.
+description: "Run bounded, resumable installed-Skill updates with verified recovery copies and preservation of local adaptations."
 ---
 
 # Freshkeeper Update
 
-Update installed Skills without changing Claude Code, Codex, OpenClaw, Hermes, Freshkeeper itself, plugins, schedules, or project toolchain locks.
+Use the bundled Node.js workflow. An explicit `$freshkeeper-update` or request to
+update installed Skills authorizes its safe update path. Keep agent binaries,
+Freshkeeper application binaries, plugins, schedules and project locks outside scope.
 
-## Confirm the scope
+## One entry point
 
-An explicit `$freshkeeper-update`, `freshkeeper update`, or request to update all installed Skills authorizes recorded updates plus evidence-recovered `clean-old` and `current-subset` updates. It does not authorize guessing sources, overwriting `manual-merge` Skills, deleting `legacy-local` Skills, installing newly discovered Skills, or migrating agent-local libraries into a shared library.
-
-Use this order:
-
-1. If `~/.agents/skills` exists, update that canonical shared library.
-2. Otherwise, fall back to the existing user-level Skill libraries for Claude Code, Codex, OpenClaw, and Hermes. Respect `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and `HERMES_HOME`; recognize OpenClaw's legacy homes.
-3. Resolve real paths. Update one physical Skill once when multiple tools reach it through symlinks, and leave those symlinks intact.
-4. Treat distinct copied installations independently and update them in their original tool libraries.
-
-## Resolve Skills CLI
-
-Prefer an installed `skills` command. Otherwise use `npx --yes skills@latest` temporarily. Do not globally install the CLI.
-
-## Inventory and back up first
-
-Resolve this Skill's directory. Choose a temporary plan path and run the bundled planner read-only first:
+For an authorized update, resolve this Skill directory and run:
 
 ```text
-node <skill-directory>/scripts/prepare-skill-update.mjs --write-plan <temporary-plan.json> --json
+node <skill-directory>/scripts/update-skills.mjs --apply --json
 ```
 
-Stop if it reports `libraryMode: none`, an unreadable library, or malformed lock metadata. Then create and verify the recovery copy:
+For a preview, omit `--apply`. It writes only a private job, response cache and staged
+payloads, not Skill contents or source metadata. Do not replace this workflow with
+new temporary installers, `skills update -g`, `skills add --all`, or a library-wide
+copy. No Skills CLI or global dependency installation is needed.
+
+The workflow performs **one quick check → one reusable recovery set → verified
+updates → local verification**. It is self-contained; a separate check Skill install
+is not required. Shared helper copies are synchronized and tested in the repository.
+
+## Reuse rather than repeat
+
+- Default overall work budget: 180 seconds, including checking, staging and writes.
+  The current atomic operation or recovery may finish after the budget; no new item
+  starts once the budget expires. Use `--timeout-ms` only when a different budget is needed.
+- Default check is current-tree only. HTTP responses and pinned payloads are reused
+  within the job. Do not start library-wide historical matching.
+- To reuse a recent check, pass `--from-check <report.json>`. The source-metadata
+  fingerprint and local content identities must still match. The report is a frozen
+  observation with a displayed check time, not a promise about later upstream changes.
+- Use repeated `--skill <name>` to narrow scope. Use `--history --skill <name>` only
+  when historical proof is actually requested or needed for that item.
+- `--write-plan <path.json>` saves a plan locator outside Skill libraries. Mutable
+  execution state stays in its private checkpoint. The plan cannot change scope on resume.
+
+Apply a prepared plan without checking or staging the whole library again:
 
 ```text
-node <skill-directory>/scripts/prepare-skill-update.mjs --backup --write-plan <temporary-plan.json> --json
+node <skill-directory>/scripts/update-skills.mjs --plan <path.json> --apply --json
 ```
 
-The plan includes recorded sources, recovered evidence, whole-directory snapshot hashes, current upstream tree hashes, and historical base commits. The backup contains every selected physical library, the global lock when present, and a manifest under `~/.agents/skill-backups/`. Do not mutate anything unless the returned backup paths exist and the manifest matches the pre-update inventory.
-
-Historical matching checks up to 200 relevant commits by default. Use `--no-history` only for a quick preview that cannot prove older clean versions, or `--history-limit <0-200>` to set an explicit depth.
-
-## Update a shared library
-
-When the planner reports `libraryMode: shared`, run:
+Retry only failed writes, reusing their existing stages and recovery copies:
 
 ```text
-skills update -g -y
+node <skill-directory>/scripts/update-skills.mjs --plan <path.json> --apply --retry-failed --json
 ```
 
-This updates global source-tracked Skills. Non-interactive mode must remain enabled so an upstream deletion is reported and skipped rather than removing the local copy.
+A failed check, changed local file or interrupted staging needs a fresh **targeted**
+run with `--skill <name> --apply`; do not rerun every Skill. Do not repeat the same
+failure without new evidence. A metadata/scope conflict stops writes and leaves
+successful results and recovery material available.
 
-For a `well-known` entry that cannot be version-compared, remove `/.well-known/...` from its recorded `sourceUrl` and refresh only the exact Skill names already present:
+## What may update
 
-```text
-skills add <recorded-base-url> --skill <installed-skill-names...> -g -y
-```
+The shared Universal library is canonical when present; otherwise use the existing
+supported agent-local libraries. Resolve physical paths, update each once, preserve
+aliases, and keep distinct copied installations independent. Never migrate libraries.
 
-Do not use `--all` or install names absent from the pre-update inventory.
+The engine accepts only:
 
-## Update agent-local fallback libraries
+- An evidenced `clean-old` directory with a verified historical base on the selected
+  publisher history, or a `current-subset` whose existing files already match upstream.
+- A recorded Git installation base that matches every local managed file except an
+  existing description adaptation. It preserves that description and custom file
+  permissions while updating the remaining upstream content.
+- A well-known source whose actual complete local bytes match its recorded installed
+  digest and whose official file-list payload is validated.
 
-When the planner reports `libraryMode: agent-local`, do not run `skills update -g`: that can create `~/.agents/skills` and silently migrate the installation model.
+A source entry alone is not proof of safe replacement. Local body/script changes,
+extra or missing local files, unsupported source layouts, unresolved origins and
+manual-merge policies remain protected. Never guess a source, reset a first baseline,
+install newly discovered Skills, overwrite a local customization, or delete a Skill
+because its upstream path disappeared. No `--force` bypass exists.
 
-For every planner item marked `updateable` or `refreshable`, use its exact `installSource`, `name`, and `writeAgents`:
+## Recovery and verification
 
-```text
-skills add <installSource> --skill <name> -g --copy --agent <writeAgents...> -y
-```
+Only directories about to be written are copied, once per job, into a recovery set
+under `~/.agents/skill-backups/`, along with the original source metadata and inventory.
+Copies preserve literal symlink targets and are content-verified before use. No
+backup is needed for a no-op run. Existing copies are verified and reused on retry.
 
-Add `--full-depth` only when the planner sets `fullDepth: true`. `writeAgents` contains one owning directory for each physical installation, so symlink aliases remain intact. Run items separately when copied installations with the same name have different physical paths.
+Each item checks local/staged identities again, writes only its declared managed
+paths, verifies the payload, and atomically commits only its successful version
+metadata. The first tracking baseline and unrelated records stay intact. New origin
+candidates are not automatically registered in the global source lock.
 
-Skip `local-only`, `untracked`, and `uncheckable` items. Never guess their sources. If an item has only symlink aliases and no safe owning directory, report it instead of replacing a symlink.
+A write or metadata failure restores that item while preserving successful peers.
+An interruption is recovered from the owned checkpoint; a completed metadata commit
+is recognized instead of installing twice. Unexpected concurrent edits are left for
+review. Final verification preserves all pre-existing names, physical paths and tool
+aliases. Do not remove recovery copies during the same run.
 
-## Apply recovered-source updates
+## Report the outcome
 
-Only planner items marked `recoverable-update` may cross this seam. First preview the file actions:
+Use the structured result: actual updates this run, previous completed updates reused,
+protected differences, source problems, upstream removals, failed items, preserved
+adaptations, check time and recovery path. `updated: 0` must not be described as an
+update. Distinguish a verified local adaptation from an unverified old version.
+Do not claim every Skill was updated when items were protected or uncheckable.
 
-```text
-node <skill-directory>/scripts/apply-provenance-updates.mjs --plan <temporary-plan.json> --json
-```
-
-Then apply them:
-
-```text
-node <skill-directory>/scripts/apply-provenance-updates.mjs --plan <temporary-plan.json> --apply --json
-```
-
-The executor:
-
-1. Revalidates the backup, installed snapshot, upstream tree, and historical base.
-2. For `current-subset`, adds only missing upstream files.
-3. For `clean-old`, performs a three-way update: replace files still equal to the historical base, remove only files proven to have been upstream-managed and deleted upstream, and preserve unrelated local files.
-4. Stops on any local conflict and restores the affected Skill from the verified backup after a partial failure.
-
-Do not pass `manual-merge`, `local-ahead`, `legacy-local`, `local-extension`, `unresolved`, or `check-blocked` items to the executor. Report them separately.
-
-## Verify after updating
-
-1. Run the planner again without `--backup`.
-2. Compare every pre-update Skill name, physical path, and visible-tool set with the backup manifest.
-3. Treat any missing pre-existing Skill or broken symlink as failure. Restore only the affected physical Skill from the recovery copy and report it.
-4. In shared mode, verify each pre-existing tool alias still resolves to the shared physical Skill.
-5. In fallback mode, verify `~/.agents/skills` was not created.
-6. Report recorded updates, recovered safe updates, already-current, local extensions, manual merges, local-ahead, legacy-local, unresolved, restored, and failed Skills separately.
-
-Do not claim every installed Skill was updated when source metadata made some Skills uncheckable.
-
-## Safety boundary
-
-- Never delete, prune, broadly reconcile, or silently migrate a Skill library.
-- Never overwrite a local or untracked Skill with a guessed remote source.
-- Never treat a name match as provenance or write recovered candidates into the global lock automatically.
-- Never update AI tool binaries, plugins, schedules, or project locks.
-- Never remove the recovery copy during the same run.
-
-## Invocation examples
-
-- `$freshkeeper-update`
-- `freshkeeper update，把我装的所有可更新 Skill 更新掉`
+`prepare-skill-update.mjs` and `apply-provenance-updates.mjs` remain compatibility
+interfaces. They are not the default workflow and their capability labels do not
+authorize an unchecked overwrite.

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { access, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -345,10 +346,12 @@ const provenanceTargets = inventory.filter((skill) => {
 }).map((skill) => {
   const entry = lock.skills[skill.name] ?? lock.skills[skill.folder];
   const tracked = lock.freshkeeperTracking?.[skill.realPath];
-  const recorded = entry?.sourceType === 'github' && entry.source ? entry
-    : tracked?.sourceStatus === 'confirmed' && ['github', 'github-recovered'].includes(tracked.sourceType) ? tracked : null;
+  const distinctCopies = allInventory.filter(value => value.name === skill.name).length > 1;
+  const trackedPublic = tracked?.sourceStatus === 'confirmed' && ['github', 'github-recovered'].includes(tracked.sourceType);
+  const recorded = distinctCopies && trackedPublic ? tracked
+    : entry?.sourceType === 'github' && entry.source ? entry : trackedPublic ? tracked : null;
   return recorded ? { ...skill, recordedSource: recorded.source, recordedSkillPath: recorded.skillPath,
-    recordedFolderHash: recorded.skillFolderHash, recordedRef: recorded.ref } : skill;
+    recordedFolderHash: recorded.skillFolderHash ?? recorded.installedUpstreamBase?.folderTree, recordedRef: recorded.ref } : skill;
 });
 const checkWellKnown = wellKnownChecker(fixture, { deadline });
 const wellKnownResults = new Map();
@@ -435,6 +438,7 @@ const result = {
   skillRoots: resolved.libraries.map((library) => library.path),
   libraries: resolved.libraries,
   lockPath,
+  sourceLockSnapshotHash: createHash('sha256').update(originalLock ?? '').digest('hex'),
   totalInstalled: items.length,
   uniqueSkillNames: new Set(items.map((item) => item.name)).size,
   tracked: items.filter((item) => item.sourceType).length,

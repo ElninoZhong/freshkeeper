@@ -38,7 +38,15 @@ npx skills add ElninoZhong/freshkeeper --skill freshkeeper-update -g -y
 
 这两条 Agent Skill 管理已安装的技能库，不管理 Freshkeeper CLI 或 AI coding 工具本体。优先使用 Universal 共享库，没有时回退到各工具现有目录。`$freshkeeper-check` 现在默认快速比对当前目录：不扫描历史，按仓库复用请求、并行处理，并设60秒上游工作预算。单项失败保留其余结果。结果给出已验证更新候选、待核对差异、来源修复、上游移除和局部重试清单；需要历史证明时，才使用 `--history --skill <名称>`。`with details` 只改变报告详细程度。
 
-`$freshkeeper-update` 继续先备份，只处理能够证明安全的更新；本地适配、来源不明和上游已移除的技能保持受保护。
+`$freshkeeper-update` 现在使用固化的单入口：快速检查 → 暂存校验 → 只备份待写入项目 → 事务更新 → 局部验证。已有检查结果、上游响应、计划和恢复副本可以复用；默认整个工作流预算180秒。只有登记基线证明其他内容未改时，才保留本地简介和自定义权限并更新；正文或脚本也有改动的继续保护。成功项不会重复安装，失败写入可从原计划局部重试；来源/检查失败则只对该项重新规划，不跑全库。无需全局 Skills CLI 覆盖命令或临时安装脚本。
+
+```bash
+node /path/to/freshkeeper-update/scripts/update-skills.mjs --apply --json
+# 仅预览，不修改已安装技能：
+node /path/to/freshkeeper-update/scripts/update-skills.mjs --json --write-plan /tmp/skill-plan.json
+# 复用计划执行，不重新全库检查：
+node /path/to/freshkeeper-update/scripts/update-skills.mjs --plan /tmp/skill-plan.json --apply --json
+```
 
 v1.5 的 `$freshkeeper-check` 会先确认所有选中 Skill 的本地版本与目录指纹，再查询线上版本。支持官方 well-known 文件清单比较；明确要求“补全缺失版本号和来源追踪”时，可先预览、备份，再原子写入有依据的来源与内容版本。普通检查保持只读，已安装版本与线上版本分别记录，补全模式不更新 Skill 内容。
 
